@@ -5,10 +5,12 @@ __MACOSX/
 .jupyter/
 .local/
 .vscode-server/
-*/*/.ipynb_checkpoints/
-*/data/
-*/output/
+*.ipynb_checkpoints/
+*data/
+*output/
 .idea/
+.config/
+*special_mission/
 
 ## data
 *.tsv
