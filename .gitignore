@@ -1,0 +1,24 @@
+## Folder
+__MACOSX/
+.cache/
+.ipython/
+.jupyter/
+.local/
+.vscode-server/
+*/*/.ipynb_checkpoints/
+*/data/
+*/output/
+
+
+## data
+*.tsv
+*.json
+*.csv
+
+## file
+.bash_history
+.profile
+.viminfo
+.wget-hsts
+.DS_Store
+.gitconfig
