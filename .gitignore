@@ -8,7 +8,7 @@ __MACOSX/
 */*/.ipynb_checkpoints/
 */data/
 */output/
-
+.idea/
 
 ## data
 *.tsv
@@ -17,8 +17,15 @@ __MACOSX/
 
 ## file
 .bash_history
+.bash_profile
+.bashrc
+.conda
+.condarc
 .profile
 .viminfo
 .wget-hsts
 .DS_Store
 .gitconfig
+.empty
+.python_history
+__pycache__
