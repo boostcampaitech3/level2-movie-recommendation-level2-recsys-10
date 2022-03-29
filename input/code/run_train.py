@@ -1,5 +1,7 @@
 import argparse
 import os
+import wandb
+from tqdm import tqdm
 
 import numpy as np
 import torch
@@ -69,6 +71,9 @@ def main():
 
     parser.add_argument("--using_pretrain", action="store_true")
 
+    # 1. wandb init
+    wandb.init(project="movierec_train_styoo", entity="styoo", name="SASRec_WithPretrain")
+
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -94,6 +99,9 @@ def main():
     args_str = f"{args.model_name}-{args.data_name}"
     args.log_file = os.path.join(args.output_dir, args_str + ".txt")
     print(str(args))
+
+    # 2. wandb config
+    wandb.config.update(args)
 
     args.item2attribute = item2attribute
     # set item score in train set to `0` in validation
@@ -123,11 +131,15 @@ def main():
 
     model = S3RecModel(args=args)
 
+    # 3. wandb watch
+    wandb.watch(model, log='all')
+
     trainer = FinetuneTrainer(
         model, train_dataloader, eval_dataloader, test_dataloader, None, args
     )
 
     print(args.using_pretrain)
+
     if args.using_pretrain:
         pretrained_path = os.path.join(args.output_dir, "Pretrain.pt")
         try:
@@ -140,12 +152,19 @@ def main():
         print("Not using pretrained model. The Model is same as SASRec")
 
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
-    for epoch in range(args.epochs):
+
+    for epoch in tqdm(range(args.epochs)):
         trainer.train(epoch)
 
         scores, _ = trainer.valid(epoch)
+        
+        # 4. wandb log
+        wandb.log({"recall@5" : scores[0],
+                   "ndcg@5" : scores[1],
+                   "recall@10" : scores[2],
+                   "ndcg@10" : scores[3]})
 
-        early_stopping(np.array(scores[-1:]), trainer.model)
+        early_stopping(np.array([scores[2]]), trainer.model)
         if early_stopping.early_stop:
             print("Early stopping")
             break

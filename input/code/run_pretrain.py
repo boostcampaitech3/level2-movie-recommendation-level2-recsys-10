@@ -1,5 +1,7 @@
 import argparse
 import os
+import wandb
+from tqdm import tqdm
 
 import numpy as np
 import torch
@@ -80,6 +82,10 @@ def main():
     )
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
 
+    # 1. wandb init
+    wandb.init(project="movierec_pretrain_styoo", entity="styoo", name="S3Rec_Pretrain")
+    wandb.run.name = 'movierec_pretrain'
+
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -102,14 +108,21 @@ def main():
     args.mask_id = max_item + 1
     args.attribute_size = attribute_size + 1
 
+    # 2. wandb config
+    wandb.config.update(args)
+
     args.item2attribute = item2attribute
 
     model = S3RecModel(args=args)
+
+    # 3. wandb watch
+    wandb.watch(model, log='all')
+
     trainer = PretrainTrainer(model, None, None, None, None, args)
 
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
 
-    for epoch in range(args.pre_epochs):
+    for epoch in tqdm(range(args.pre_epochs)):
 
         pretrain_dataset = PretrainDataset(args, user_seq, long_sequence)
         pretrain_sampler = RandomSampler(pretrain_dataset)
@@ -118,6 +131,13 @@ def main():
         )
 
         losses = trainer.pretrain(epoch, pretrain_dataloader)
+
+        # 4. wandb log
+        wandb.log({"epoch" : losses['epoch'],
+                   "aap_loss_avg" : losses['aap_loss_avg'],
+                   "mip_loss_avg" : losses['mip_loss_avg'],
+                   "map_loss_avg" : losses['map_loss_avg'],
+                   "sp_loss_avg" : losses['sp_loss_avg']})
 
         ## comparing `sp_loss_avg``
         early_stopping(np.array([-losses["sp_loss_avg"]]), trainer.model)

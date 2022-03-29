@@ -11,11 +11,14 @@ __MACOSX/
 .idea/
 .config/
 *special_mission/
+.nv/
+*wandb/
 
 ## data
 *.tsv
 *.json
 *.csv
+*.txt
 
 ## file
 .bash_history
@@ -31,3 +34,5 @@ __MACOSX/
 .empty
 .python_history
 __pycache__
+.netrc
+.screenrc
