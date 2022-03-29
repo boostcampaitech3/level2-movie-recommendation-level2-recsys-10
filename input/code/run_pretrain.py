@@ -3,6 +3,8 @@ import os
 
 import numpy as np
 import torch
+import wandb
+
 from torch.utils.data import DataLoader, RandomSampler
 
 from datasets import PretrainDataset
@@ -18,6 +20,9 @@ from utils import (
 
 
 def main():
+    wandb.init(project="movie_baseline")
+    # 실험명 지정
+    wandb.run.name = 'S-3 Rec (train)'
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--data_dir", default="../data/train/", type=str)
@@ -81,6 +86,8 @@ def main():
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
 
     args = parser.parse_args()
+    # wandb config update
+    wandb.config.update(args)  # adds all of the arguments as config variables
 
     set_seed(args.seed)
     check_path(args.output_dir)
@@ -105,6 +112,7 @@ def main():
     args.item2attribute = item2attribute
 
     model = S3RecModel(args=args)
+    wandb.watch(model)
     trainer = PretrainTrainer(model, None, None, None, None, args)
 
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
@@ -118,6 +126,7 @@ def main():
         )
 
         losses = trainer.pretrain(epoch, pretrain_dataloader)
+        wandb.log(losses)
 
         ## comparing `sp_loss_avg``
         early_stopping(np.array([-losses["sp_loss_avg"]]), trainer.model)
