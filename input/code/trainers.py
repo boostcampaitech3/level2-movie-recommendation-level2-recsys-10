@@ -3,11 +3,8 @@ import torch
 import torch.nn as nn
 import tqdm
 from torch.optim import Adam
-import wandb
 
 from utils import ndcg_k, recall_at_k
-
-wandb.init(project="MovieLens", entity="mask_classification")
 
 class Trainer:
     def __init__(
@@ -225,7 +222,7 @@ class FinetuneTrainer(Trainer):
             args,
         )
         
-        wandb.config.update(self.args)
+        
 
     def iteration(self, epoch, dataloader, mode="train"):
 
@@ -263,7 +260,6 @@ class FinetuneTrainer(Trainer):
                 "rec_avg_loss": "{:.4f}".format(rec_avg_loss / len(rec_data_iter)),
                 "rec_cur_loss": "{:.4f}".format(rec_cur_loss),
             }
-            wandb.log({"loss": post_fix['rec_avg_loss']})
 
             if (epoch + 1) % self.args.log_freq == 0:
                 print(str(post_fix))
