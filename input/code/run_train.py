@@ -16,6 +16,8 @@ from utils import (
     set_seed,
 )
 
+import wandb
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -144,6 +146,7 @@ def main():
         trainer.train(epoch)
 
         scores, _ = trainer.valid(epoch)
+        wandb.log({"scores": scores})
 
         early_stopping(np.array(scores[-1:]), trainer.model)
         if early_stopping.early_stop:
