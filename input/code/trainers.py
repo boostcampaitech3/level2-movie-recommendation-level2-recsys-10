@@ -6,6 +6,8 @@ from torch.optim import Adam
 
 from utils import ndcg_k, recall_at_k
 
+import wandb
+wandb.init(project="movie", entity="ahyeon0508")
 
 class Trainer:
     def __init__(
@@ -130,6 +132,7 @@ class PretrainTrainer(Trainer):
         )
 
     def pretrain(self, epoch, pretrain_dataloader):
+        wandb.config.update(self.args)
 
         desc = (
             f"AAP-{self.args.aap_weight}-"
@@ -146,6 +149,7 @@ class PretrainTrainer(Trainer):
         )
 
         self.model.train()
+        wandb.watch(self.model)
         aap_loss_avg = 0.0
         mip_loss_avg = 0.0
         map_loss_avg = 0.0
@@ -174,6 +178,7 @@ class PretrainTrainer(Trainer):
                 neg_segment,
             )
 
+
             joint_loss = (
                 self.args.aap_weight * aap_loss
                 + self.args.mip_weight * mip_loss
@@ -198,6 +203,7 @@ class PretrainTrainer(Trainer):
             "map_loss_avg": map_loss_avg / num,
             "sp_loss_avg": sp_loss_avg / num,
         }
+        wandb.log({"loss": losses})
         print(desc)
         print(str(losses))
         return losses
@@ -224,6 +230,8 @@ class FinetuneTrainer(Trainer):
 
     def iteration(self, epoch, dataloader, mode="train"):
 
+        wandb.config.update(self.args)
+
         # Setting the tqdm progress bar
 
         rec_data_iter = tqdm.tqdm(
@@ -234,6 +242,8 @@ class FinetuneTrainer(Trainer):
         )
         if mode == "train":
             self.model.train()
+            wandb.watch(self.model)
+
             rec_avg_loss = 0.0
             rec_cur_loss = 0.0
 
@@ -256,6 +266,8 @@ class FinetuneTrainer(Trainer):
                 "rec_avg_loss": "{:.4f}".format(rec_avg_loss / len(rec_data_iter)),
                 "rec_cur_loss": "{:.4f}".format(rec_cur_loss),
             }
+
+            wandb.log({"loss": post_fix['rec_avg_loss']})
 
             if (epoch + 1) % self.args.log_freq == 0:
                 print(str(post_fix))

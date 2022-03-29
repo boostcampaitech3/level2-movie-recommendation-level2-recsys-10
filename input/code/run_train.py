@@ -16,6 +16,7 @@ from utils import (
     set_seed,
 )
 
+import wandb
 
 def main():
     parser = argparse.ArgumentParser()
@@ -142,8 +143,10 @@ def main():
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
     for epoch in range(args.epochs):
         trainer.train(epoch)
+        wandb.watch(trainer)
 
         scores, _ = trainer.valid(epoch)
+        wandb.log({"scores": scores})
 
         early_stopping(np.array(scores[-1:]), trainer.model)
         if early_stopping.early_stop:
