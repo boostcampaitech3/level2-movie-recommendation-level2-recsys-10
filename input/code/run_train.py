@@ -19,7 +19,11 @@ from utils import (
 import wandb
 
 
+
 def main():
+    wandb.init(project="MovieLens", entity="mask_classification")
+    wandb.run.name = 'S-3 Rec (train)'
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--data_dir", default="../data/train/", type=str)
@@ -72,6 +76,7 @@ def main():
     parser.add_argument("--using_pretrain", action="store_true")
 
     args = parser.parse_args()
+    
 
     set_seed(args.seed)
     check_path(args.output_dir)
@@ -80,6 +85,8 @@ def main():
     args.cuda_condition = torch.cuda.is_available() and not args.no_cuda
 
     args.data_file = args.data_dir + "train_ratings.csv"
+    wandb.config.update(args)
+
     item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
 
     user_seq, max_item, valid_rating_matrix, test_rating_matrix, _ = get_user_seqs(
@@ -100,6 +107,8 @@ def main():
     args.item2attribute = item2attribute
     # set item score in train set to `0` in validation
     args.train_matrix = valid_rating_matrix
+
+    
 
     # save model
     checkpoint = args_str + ".pt"
@@ -124,6 +133,7 @@ def main():
     )
 
     model = S3RecModel(args=args)
+    wandb.watch(model)
 
     trainer = FinetuneTrainer(
         model, train_dataloader, eval_dataloader, test_dataloader, None, args
@@ -146,8 +156,13 @@ def main():
         trainer.train(epoch)
 
         scores, _ = trainer.valid(epoch)
-        wandb.log({"scores": scores})
 
+        wandb.log({"recall@5" : scores[0],
+                   "ndcg@5" : scores[1],
+                   "recall@10" : scores[2],
+                   "ndcg@10" : scores[3]})
+
+    
         early_stopping(np.array(scores[-1:]), trainer.model)
         if early_stopping.early_stop:
             print("Early stopping")
@@ -160,6 +175,7 @@ def main():
     scores, result_info = trainer.test(0)
     print(result_info)
 
+    
 
 if __name__ == "__main__":
     main()
