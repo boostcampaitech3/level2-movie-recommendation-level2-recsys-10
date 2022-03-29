@@ -11,7 +11,7 @@ __MACOSX/
 .idea/
 .config/
 *special_mission/
-wandb
+*wandb/
 
 ## data
 *.tsv
