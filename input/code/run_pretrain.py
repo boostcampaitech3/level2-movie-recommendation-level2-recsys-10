@@ -1,5 +1,6 @@
 import argparse
 import os
+import wandb
 
 import numpy as np
 import torch
@@ -83,10 +84,12 @@ def main():
         "--adam_beta2", type=float, default=0.999, help="adam second beta value"
     )
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
+    parser.add_argument("--wandb_name")
 
     args = parser.parse_args()
-    # wandb config update
-    wandb.config.update(args)  # adds all of the arguments as config variables
+    wandb.init(project="movierec_pretrain", entity="egsbj")
+    wandb.run.name = args.wandb_name
+    wandb.config.update(args)
 
     set_seed(args.seed)
     check_path(args.output_dir)
@@ -126,6 +129,12 @@ def main():
 
         losses = trainer.pretrain(epoch, pretrain_dataloader)
         wandb.log(losses)
+
+        wandb.log({"epoch" : losses['epoch'],
+            "aap_loss_avg" : losses['aap_loss_avg'],
+            "mip_loss_avg" : losses['mip_loss_avg'],
+            "map_loss_avg" : losses['map_loss_avg'],
+            "sp_loss_avg" : losses['sp_loss_avg']})
 
         ## comparing `sp_loss_avg``
         early_stopping(np.array([-losses["sp_loss_avg"]]), trainer.model)

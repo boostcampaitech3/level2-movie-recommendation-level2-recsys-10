@@ -157,12 +157,15 @@ def generate_submission_file(data_file, preds):
 
     rating_df = pd.read_csv(data_file)
     users = rating_df["user"].unique()
+    item_ids = rating_df['item'].unique()
+    
+    idx2item = pd.Series(data=item_ids, index=np.arange(len(item_ids))+1)  # item idx -> item id
 
     result = []
 
     for index, items in enumerate(preds):
         for item in items:
-            result.append((users[index], item))
+            result.append((users[index], idx2item[item]))
 
     pd.DataFrame(result, columns=["user", "item"]).to_csv(
         "output/submission.csv", index=False
@@ -171,10 +174,6 @@ def generate_submission_file(data_file, preds):
 
 def get_user_seqs(data_file):
     rating_df = pd.read_csv(data_file)
-    # baseline 
-    #lines = rating_df.groupby("user")["item"].apply(list)
-
-    # labelencoding by styoo
     item_ids = rating_df['item'].unique()
     user_ids = rating_df['user'].unique()
     num_item, num_user = len(item_ids), len(user_ids)
@@ -219,9 +218,6 @@ def get_user_seqs(data_file):
 
 def get_user_seqs_long(data_file):
     rating_df = pd.read_csv(data_file)
-    # "user" 가 리뷰한 item들을 list로 만들어 Series로 return 
-    #lines = rating_df.groupby("user")["item"].apply(list)
-    
     item_ids = rating_df['item'].unique()
     user_ids = rating_df['user'].unique()
     num_item, num_user = len(item_ids), len(user_ids)
