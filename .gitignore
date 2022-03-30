@@ -19,6 +19,8 @@ __MACOSX/
 *.json
 *.csv
 *.txt
+*.sh
+*.out
 
 ## file
 .bash_history
