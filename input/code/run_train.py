@@ -70,11 +70,16 @@ def main():
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
 
     parser.add_argument("--using_pretrain", action="store_true")
+    parser.add_argument("--wandb_name")
 
     # 1. wandb init
-    wandb.init(project="movierec_train_styoo", entity="styoo", name="SASRec_WithPretrain")
-
+    #wandb.init(project="movierec_train_styoo", entity="styoo", name="SASRec_WithPretrain")
     args = parser.parse_args()
+    wandb.init(project="movierec_train", entity="egsbj")
+    wandb.run.name = args.wandb_name
+
+    # 2. wandb config
+    wandb.config.update(args)
 
     set_seed(args.seed)
     check_path(args.output_dir)
@@ -99,9 +104,6 @@ def main():
     args_str = f"{args.model_name}-{args.data_name}"
     args.log_file = os.path.join(args.output_dir, args_str + ".txt")
     print(str(args))
-
-    # 2. wandb config
-    wandb.config.update(args)
 
     args.item2attribute = item2attribute
     # set item score in train set to `0` in validation
@@ -131,9 +133,6 @@ def main():
 
     model = S3RecModel(args=args)
 
-    # 3. wandb watch
-    wandb.watch(model, log='all')
-
     trainer = FinetuneTrainer(
         model, train_dataloader, eval_dataloader, test_dataloader, None, args
     )
@@ -158,7 +157,7 @@ def main():
 
         scores, _ = trainer.valid(epoch)
         
-        # 4. wandb log
+        # 3. wandb log
         wandb.log({"recall@5" : scores[0],
                    "ndcg@5" : scores[1],
                    "recall@10" : scores[2],

@@ -158,7 +158,7 @@ def generate_submission_file(data_file, preds):
     users = rating_df["user"].unique()
     item_ids = rating_df['item'].unique()
     
-    idx2item = pd.Series(data=item_ids, index=np.arange(len(item_ids))+1)  # item re-indexing (1~num_item), num_item+1: mask idx
+    idx2item = pd.Series(data=item_ids, index=np.arange(len(item_ids))+1)  # item idx -> item id
 
     result = []
 

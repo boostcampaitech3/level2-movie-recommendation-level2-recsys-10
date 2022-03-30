@@ -81,11 +81,16 @@ def main():
         "--adam_beta2", type=float, default=0.999, help="adam second beta value"
     )
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
+    parser.add_argument("--wandb_name", type=str)
 
     # 1. wandb init
-    wandb.init(project="movierec_pretrain_styoo", entity="styoo", name="S3Rec_Pretrain")
-
+    #wandb.init(project="movierec_pretrain_styoo", entity="styoo", name="S3Rec_Pretrain")
     args = parser.parse_args()
+    wandb.init(project="movierec_pretrain", entity="egsbj")
+    wandb.run.name = args.wandb_name
+
+    # 2. wandb config
+    wandb.config.update(args)
 
     set_seed(args.seed)
     check_path(args.output_dir)
@@ -107,16 +112,10 @@ def main():
     args.mask_id = max_item + 1
     args.attribute_size = attribute_size + 1
 
-    # 2. wandb config
-    wandb.config.update(args)
-
     args.item2attribute = item2attribute
 
     model = S3RecModel(args=args)
-
-    # 3. wandb watch
-    wandb.watch(model, log='all')
-
+    
     trainer = PretrainTrainer(model, None, None, None, None, args)
 
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
@@ -131,7 +130,7 @@ def main():
 
         losses = trainer.pretrain(epoch, pretrain_dataloader)
 
-        # 4. wandb log
+        # 3. wandb log
         wandb.log({"epoch" : losses['epoch'],
                    "aap_loss_avg" : losses['aap_loss_avg'],
                    "mip_loss_avg" : losses['mip_loss_avg'],
