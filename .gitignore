@@ -35,3 +35,4 @@ __MACOSX/
 .python_history
 __pycache__
 .netrc
+.screenrc
