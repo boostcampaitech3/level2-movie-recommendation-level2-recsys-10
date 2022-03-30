@@ -3,6 +3,8 @@ import os
 
 import numpy as np
 import torch
+import wandb
+
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 
 from datasets import SASRecDataset
@@ -18,6 +20,7 @@ from utils import (
 
 
 def main():
+    wandb.init(project="movie_train", name="S3Rec_train")
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--data_dir", default="../data/train/", type=str)
@@ -70,6 +73,7 @@ def main():
     parser.add_argument("--using_pretrain", action="store_true")
 
     args = parser.parse_args()
+    wandb.config.update(args)
 
     set_seed(args.seed)
     check_path(args.output_dir)
@@ -104,12 +108,14 @@ def main():
     args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
 
     train_dataset = SASRecDataset(args, user_seq, data_type="train")
+    # RandomSampler : Batch를 뽑을때 섞으니, User들의 순서를 섞는것
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(
         train_dataset, sampler=train_sampler, batch_size=args.batch_size
     )
 
     eval_dataset = SASRecDataset(args, user_seq, data_type="valid")
+    # SequentialSampler : 순서대로 뽑아야 채점이 편하기에 순서대로 뽑는다, 순서대로 뽑지 않으면 유저 아이디를 매핑해야
     eval_sampler = SequentialSampler(eval_dataset)
     eval_dataloader = DataLoader(
         eval_dataset, sampler=eval_sampler, batch_size=args.batch_size
@@ -122,6 +128,7 @@ def main():
     )
 
     model = S3RecModel(args=args)
+    wandb.watch(model)
 
     trainer = FinetuneTrainer(
         model, train_dataloader, eval_dataloader, test_dataloader, None, args
@@ -144,7 +151,14 @@ def main():
         trainer.train(epoch)
 
         scores, _ = trainer.valid(epoch)
-
+        wandb.log(
+            {
+            "RECALL@5": scores[0],
+            "NDCG@5": scores[1],
+            "RECALL@10":scores[2],
+            "NDCG@10": scores[3],
+            }
+        )
         early_stopping(np.array(scores[-1:]), trainer.model)
         if early_stopping.early_stop:
             print("Early stopping")

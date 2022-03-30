@@ -277,8 +277,10 @@ class FinetuneTrainer(Trainer):
 
                 rating_pred = rating_pred.cpu().data.numpy().copy()
                 batch_user_index = user_ids.cpu().numpy()
+                # implicit 이 1인 경우, rating_pred를 0으로 만들어준다
                 rating_pred[self.args.train_matrix[batch_user_index].toarray() > 0] = 0
 
+                # arpartition으로 
                 ind = np.argpartition(rating_pred, -10)[:, -10:]
 
                 arr_ind = rating_pred[np.arange(len(rating_pred))[:, None], ind]

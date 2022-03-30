@@ -20,9 +20,8 @@ from utils import (
 
 
 def main():
-    wandb.init(project="movie_baseline")
-    # 실험명 지정
-    wandb.run.name = 'S-3 Rec (train)'
+    wandb.init(project="movie_baseline", name="S3Rec_Pretrain")
+    
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--data_dir", default="../data/train/", type=str)

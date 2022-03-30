@@ -101,7 +101,7 @@ def generate_rating_matrix_valid(user_seq, num_users, num_items):
     col = []
     data = []
     for user_id, item_list in enumerate(user_seq):
-        for item in item_list[:-2]:  #
+        for item in item_list[:-2]:  # 각 유저의 itemsets은 뒤에서 2개는 빼고 생성
             row.append(user_id)
             col.append(item)
             data.append(1)
@@ -120,7 +120,7 @@ def generate_rating_matrix_test(user_seq, num_users, num_items):
     col = []
     data = []
     for user_id, item_list in enumerate(user_seq):
-        for item in item_list[:-1]:  #
+        for item in item_list[:-1]:  # 
             row.append(user_id)
             col.append(item)
             data.append(1)
@@ -128,6 +128,7 @@ def generate_rating_matrix_test(user_seq, num_users, num_items):
     row = np.array(row)
     col = np.array(col)
     data = np.array(data)
+    # user 가 남긴 item을 기준으로 sparse matrix 생성 (num_users x num_items)
     rating_matrix = csr_matrix((data, (row, col)), shape=(num_users, num_items))
 
     return rating_matrix
@@ -170,7 +171,25 @@ def generate_submission_file(data_file, preds):
 
 def get_user_seqs(data_file):
     rating_df = pd.read_csv(data_file)
-    lines = rating_df.groupby("user")["item"].apply(list)
+    # baseline 
+    #lines = rating_df.groupby("user")["item"].apply(list)
+
+    # labelencoding by styoo
+    item_ids = rating_df['item'].unique()
+    user_ids = rating_df['user'].unique()
+    num_item, num_user = len(item_ids), len(user_ids)
+
+    # user, item indexing
+    item2idx = pd.Series(data=np.arange(len(item_ids))+1, index=item_ids) # item re-indexing (1~num_item), num_item+1: mask idx
+    user2idx = pd.Series(data=np.arange(len(user_ids)), index=user_ids) # user re-indexing (0~num_user-1)
+
+    # dataframe indexing
+    rating_df = pd.merge(rating_df, pd.DataFrame({'item': item_ids, 'item_idx': item2idx[item_ids].values}), on='item', how='inner')
+    rating_df = pd.merge(rating_df, pd.DataFrame({'user': user_ids, 'user_idx': user2idx[user_ids].values}), on='user', how='inner')
+    rating_df.sort_values(['user_idx', 'time'], inplace=True)
+    del rating_df['item'], rating_df['user'] 
+
+    lines = rating_df.groupby("user_idx")["item_idx"].apply(list)
     user_seq = []
     item_set = set()
     for line in lines:
@@ -178,6 +197,7 @@ def get_user_seqs(data_file):
         items = line
         user_seq.append(items)
         item_set = item_set | set(items)
+    # 가장 큰 itemsets
     max_item = max(item_set)
 
     num_users = len(lines)
@@ -199,15 +219,34 @@ def get_user_seqs(data_file):
 
 def get_user_seqs_long(data_file):
     rating_df = pd.read_csv(data_file)
-    lines = rating_df.groupby("user")["item"].apply(list)
+    # "user" 가 리뷰한 item들을 list로 만들어 Series로 return 
+    #lines = rating_df.groupby("user")["item"].apply(list)
+    
+    item_ids = rating_df['item'].unique()
+    user_ids = rating_df['user'].unique()
+    num_item, num_user = len(item_ids), len(user_ids)
+
+    # user, item indexing
+    item2idx = pd.Series(data=np.arange(len(item_ids))+1, index=item_ids) # item re-indexing (1~num_item), num_item+1: mask idx
+    user2idx = pd.Series(data=np.arange(len(user_ids)), index=user_ids) # user re-indexing (0~num_user-1)
+
+    # dataframe indexing
+    rating_df = pd.merge(rating_df, pd.DataFrame({'item': item_ids, 'item_idx': item2idx[item_ids].values}), on='item', how='inner')
+    rating_df = pd.merge(rating_df, pd.DataFrame({'user': user_ids, 'user_idx': user2idx[user_ids].values}), on='user', how='inner')
+    rating_df.sort_values(['user_idx', 'time'], inplace=True)
+    del rating_df['item'], rating_df['user'] 
+
+    lines = rating_df.groupby("user_idx")["item_idx"].apply(list)
     user_seq = []
     long_sequence = []
     item_set = set()
     for line in lines:
         items = line
         long_sequence.extend(items)
-        user_seq.append(items)
+        user_seq.append(items) # 유저의 고유 번호는 없이 순서대로 쭉 나열
+        # 모든 유저들이 소비한 전체 영화 item sets을 구하기 위함, 합집합의미
         item_set = item_set | set(items)
+    # itemsets중에 가장 큰 번호
     max_item = max(item_set)
 
     return user_seq, max_item, long_sequence

@@ -131,8 +131,9 @@ class PretrainDataset(Dataset):
 class SASRecDataset(Dataset):
     def __init__(self, args, user_seq, test_neg_items=None, data_type="train"):
         self.args = args
+        # user 순서 정보 
         self.user_seq = user_seq
-        self.test_neg_items = test_neg_items
+        self.test_neg_items = test_neg_items # 사용하지 않음, sample을 따로 지정할때 사용하는 변수
         self.data_type = data_type
         self.max_len = args.max_seq_length
 
@@ -170,25 +171,28 @@ class SASRecDataset(Dataset):
             input_ids = items[:-1]
             target_pos = items[1:]
             answer = [items[-1]]
-        else:
+        else: # for submission
             input_ids = items[:]
             target_pos = items[:]  # will not be used
             answer = []
 
+        # negative sampling
         target_neg = []
         seq_set = set(items)
-        for _ in input_ids:
+        for _ in input_ids: # seq_set에 없는 items들만 target_neg에 input_ids와 같은 숫자로 뽑힌다
             target_neg.append(neg_sample(seq_set, self.args.item_size))
 
-        pad_len = self.max_len - len(input_ids)
+        pad_len = self.max_len - len(input_ids) # 50 - item 수
         input_ids = [0] * pad_len + input_ids
         target_pos = [0] * pad_len + target_pos
         target_neg = [0] * pad_len + target_neg
 
-        input_ids = input_ids[-self.max_len :]
+        # input_ids 가 max_len 보다 많은 경우, (영화 리뷰 수가 50을 넘어가는 경우는) max_len 만큼 슬라이싱 해줘야 한다.
+        input_ids = input_ids[-self.max_len :] 
         target_pos = target_pos[-self.max_len :]
         target_neg = target_neg[-self.max_len :]
 
+        # max_len 과 다시 생성한 items 목록들의 크기가 맞는지 확인
         assert len(input_ids) == self.max_len
         assert len(target_pos) == self.max_len
         assert len(target_neg) == self.max_len
@@ -207,10 +211,10 @@ class SASRecDataset(Dataset):
         else:
             cur_tensors = (
                 torch.tensor(user_id, dtype=torch.long),  # user_id for testing
-                torch.tensor(input_ids, dtype=torch.long),
-                torch.tensor(target_pos, dtype=torch.long),
+                torch.tensor(input_ids, dtype=torch.long), # user_id의 영화 리뷰 기록
+                torch.tensor(target_pos, dtype=torch.long), # 한칸씩 밀어낸 pos
                 torch.tensor(target_neg, dtype=torch.long),
-                torch.tensor(answer, dtype=torch.long),
+                torch.tensor(answer, dtype=torch.long), # valid, test 에만 필요함, train에서는 target_pos로 학습
             )
 
         return cur_tensors
