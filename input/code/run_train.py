@@ -1,5 +1,6 @@
 import argparse
 import os
+import wandb
 
 import numpy as np
 import torch
@@ -68,8 +69,12 @@ def main():
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
 
     parser.add_argument("--using_pretrain", action="store_true")
+    parser.add_argument("--wandb_name")
 
     args = parser.parse_args()
+    wandb.init(project="movierec_train", entity="egsbj")
+    wandb.run.name = args.wandb_name
+    wandb.config.update(args)
 
     set_seed(args.seed)
     check_path(args.output_dir)
@@ -144,6 +149,11 @@ def main():
         trainer.train(epoch)
 
         scores, _ = trainer.valid(epoch)
+
+        wandb.log({"recall@5" : scores[0],
+                   "ndcg@5" : scores[1],
+                   "recall@10" : scores[2],
+                   "ndcg@10" : scores[3]})
 
         early_stopping(np.array(scores[-1:]), trainer.model)
         if early_stopping.early_stop:
