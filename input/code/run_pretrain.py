@@ -84,7 +84,6 @@ def main():
 
     # 1. wandb init
     wandb.init(project="movierec_pretrain_styoo", entity="styoo", name="S3Rec_Pretrain")
-    wandb.run.name = 'movierec_pretrain'
 
     args = parser.parse_args()
 

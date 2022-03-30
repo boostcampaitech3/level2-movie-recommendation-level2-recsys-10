@@ -156,12 +156,15 @@ def generate_submission_file(data_file, preds):
 
     rating_df = pd.read_csv(data_file)
     users = rating_df["user"].unique()
+    item_ids = rating_df['item'].unique()
+    
+    idx2item = pd.Series(data=item_ids, index=np.arange(len(item_ids))+1)  # item re-indexing (1~num_item), num_item+1: mask idx
 
     result = []
 
     for index, items in enumerate(preds):
         for item in items:
-            result.append((users[index], item))
+            result.append((users[index], idx2item[item]))
 
     pd.DataFrame(result, columns=["user", "item"]).to_csv(
         "output/submission.csv", index=False
