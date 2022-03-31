@@ -70,7 +70,7 @@ def main():
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
 
     parser.add_argument("--using_pretrain", action="store_true")
-    parser.add_argument("--wandb_name")
+    parser.add_argument("--wandb_name", type=str)
 
     # 1. wandb init
     #wandb.init(project="movierec_train_styoo", entity="styoo", name="SASRec_WithPretrain")
@@ -80,6 +80,7 @@ def main():
 
     # 2. wandb config
     wandb.config.update(args)
+    print(str(args))
 
     set_seed(args.seed)
     check_path(args.output_dir)

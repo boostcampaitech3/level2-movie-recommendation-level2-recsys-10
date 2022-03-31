@@ -91,6 +91,7 @@ def main():
 
     # 2. wandb config
     wandb.config.update(args)
+    print(str(args))
 
     set_seed(args.seed)
     check_path(args.output_dir)
