@@ -248,7 +248,7 @@ class BERT4RecModel(nn.Module):
         self.item_encoder = Encoder(args)
         self.LayerNorm = LayerNorm(args.hidden_size, eps=1e-12)
         self.dropout = nn.Dropout(args.hidden_dropout_prob)
-        self.out = nn.Linear(args.hidden_size, args.item_size - 1)
+        self.out = nn.Linear(args.hidden_size, args.item_size)
         self.args = args
 
         #self.criterion = nn.BCELoss(reduction="none")
@@ -302,7 +302,7 @@ class BERT4RecModel(nn.Module):
 
         sequence_output = item_encoded_layers[-1]
         sequence_output = self.out(sequence_output)
-        
+
         return sequence_output
 
     def init_weights(self, module):

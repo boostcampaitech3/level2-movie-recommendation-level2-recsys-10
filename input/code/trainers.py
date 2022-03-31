@@ -313,7 +313,7 @@ class BERT4RecTrainer(Trainer):
         submission_dataloader,
         args,
     ):
-        super(FinetuneTrainer, self).__init__(
+        super(BERT4RecTrainer, self).__init__(
             model,
             train_dataloader,
             eval_dataloader,
@@ -321,6 +321,8 @@ class BERT4RecTrainer(Trainer):
             submission_dataloader,
             args,
         )
+
+        self.criterion = nn.CrossEntropyLoss(ignore_index=0)
 
     def iteration(self, epoch, dataloader, mode="train"):
 
@@ -340,10 +342,13 @@ class BERT4RecTrainer(Trainer):
             for i, batch in rec_data_iter:
                 # 0. batch_data will be sent into the device(GPU or CPU)
                 batch = tuple(t.to(self.device) for t in batch)
-                _, input_ids, target_pos, target_neg, _ = batch
-                # Binary cross_entropy
-                sequence_output = self.model.finetune(input_ids)
-                loss = self.cross_entropy(sequence_output, target_pos, target_neg)
+                _, tokens, labels, _ = batch
+
+                sequence_output = self.model(tokens)
+                sequence_output = sequence_output.view(-1, sequence_output.size(-1))
+                labels = labels.view(-1)
+
+                loss = self.criterion(sequence_output, labels)
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
@@ -368,14 +373,14 @@ class BERT4RecTrainer(Trainer):
             for i, batch in rec_data_iter:
 
                 batch = tuple(t.to(self.device) for t in batch)
-                user_ids, input_ids, _, target_neg, answers = batch
-                recommend_output = self.model.finetune(input_ids)
+                user_ids, tokens, _, answers = batch
+                recommend_output = self.model(tokens)
 
                 recommend_output = recommend_output[:, -1, :]
 
-                rating_pred = self.predict_full(recommend_output)
+                # rating_pred = self.predict_full(recommend_output)
 
-                rating_pred = rating_pred.cpu().data.numpy().copy()
+                rating_pred = recommend_output.cpu().data.numpy().copy()
                 batch_user_index = user_ids.cpu().numpy()
                 rating_pred[self.args.train_matrix[batch_user_index].toarray() > 0] = 0
 
