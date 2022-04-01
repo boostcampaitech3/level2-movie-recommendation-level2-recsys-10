@@ -6,7 +6,6 @@ from torch.optim import Adam
 
 from utils import ndcg_k, recall_at_k
 
-
 class Trainer:
     def __init__(
         self,
@@ -128,6 +127,7 @@ class PretrainTrainer(Trainer):
             submission_dataloader,
             args,
         )
+        
 
     def pretrain(self, epoch, pretrain_dataloader):
 
@@ -221,11 +221,13 @@ class FinetuneTrainer(Trainer):
             submission_dataloader,
             args,
         )
+        
+        
 
     def iteration(self, epoch, dataloader, mode="train"):
 
         # Setting the tqdm progress bar
-
+        
         rec_data_iter = tqdm.tqdm(
             enumerate(dataloader),
             desc="Recommendation EP_%s:%d" % (mode, epoch),
@@ -251,6 +253,8 @@ class FinetuneTrainer(Trainer):
                 rec_avg_loss += loss.item()
                 rec_cur_loss = loss.item()
 
+                
+
             post_fix = {
                 "epoch": epoch,
                 "rec_avg_loss": "{:.4f}".format(rec_avg_loss / len(rec_data_iter)),
@@ -259,6 +263,8 @@ class FinetuneTrainer(Trainer):
 
             if (epoch + 1) % self.args.log_freq == 0:
                 print(str(post_fix))
+            
+            
 
         else:
             self.model.eval()

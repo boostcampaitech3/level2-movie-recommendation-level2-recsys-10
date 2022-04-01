@@ -19,9 +19,13 @@ from utils import (
     set_seed,
 )
 
+import wandb
+
+
 
 def main():
     wandb.init(project="movie_train", name="S3Rec_train")
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--data_dir", default="../data/train/", type=str)
@@ -78,6 +82,7 @@ def main():
     wandb.init(project="movierec_train", entity="egsbj")
     wandb.run.name = args.wandb_name
     wandb.config.update(args)
+    
 
     set_seed(args.seed)
     check_path(args.output_dir)
@@ -86,6 +91,8 @@ def main():
     args.cuda_condition = torch.cuda.is_available() and not args.no_cuda
 
     args.data_file = args.data_dir + "train_ratings.csv"
+    wandb.config.update(args)
+
     item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
 
     user_seq, max_item, valid_rating_matrix, test_rating_matrix, _ = get_user_seqs(
@@ -106,6 +113,8 @@ def main():
     args.item2attribute = item2attribute
     # set item score in train set to `0` in validation
     args.train_matrix = valid_rating_matrix
+
+    
 
     # save model
     checkpoint = args_str + ".pt"
@@ -161,6 +170,7 @@ def main():
                    "recall@10" : scores[2],
                    "ndcg@10" : scores[3]})
 
+    
         early_stopping(np.array(scores[-1:]), trainer.model)
         if early_stopping.early_stop:
             print("Early stopping")
@@ -173,6 +183,7 @@ def main():
     scores, result_info = trainer.test(0)
     print(result_info)
 
+    
 
 if __name__ == "__main__":
     main()
