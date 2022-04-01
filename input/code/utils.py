@@ -170,9 +170,9 @@ def generate_submission_file(data_file, preds):
         "output/submission.csv", index=False
     )
 
+def item_encoding(df):
+    rating_df = df.copy()
 
-def get_user_seqs(data_file):
-    rating_df = pd.read_csv(data_file)
     item_ids = rating_df['item'].unique()
     user_ids = rating_df['user'].unique()
     num_item, num_user = len(item_ids), len(user_ids)
@@ -185,7 +185,26 @@ def get_user_seqs(data_file):
     rating_df = pd.merge(rating_df, pd.DataFrame({'item': item_ids, 'item_idx': item2idx[item_ids].values}), on='item', how='inner')
     rating_df = pd.merge(rating_df, pd.DataFrame({'user': user_ids, 'user_idx': user2idx[user_ids].values}), on='user', how='inner')
     rating_df.sort_values(['user_idx', 'time'], inplace=True)
-    del rating_df['item'], rating_df['user'] 
+    del rating_df['item'], rating_df['user']
+
+    return rating_df
+
+def get_user_seqs(data_file, model_name):
+    df = pd.read_csv(data_file)
+    rating_df = item_encoding(df)
+    # item_ids = rating_df['item'].unique()
+    # user_ids = rating_df['user'].unique()
+    # num_item, num_user = len(item_ids), len(user_ids)
+
+    # # user, item indexing
+    # item2idx = pd.Series(data=np.arange(len(item_ids))+1, index=item_ids) # item re-indexing (1~num_item), num_item+1: mask idx
+    # user2idx = pd.Series(data=np.arange(len(user_ids)), index=user_ids) # user re-indexing (0~num_user-1)
+
+    # # dataframe indexing
+    # rating_df = pd.merge(rating_df, pd.DataFrame({'item': item_ids, 'item_idx': item2idx[item_ids].values}), on='item', how='inner')
+    # rating_df = pd.merge(rating_df, pd.DataFrame({'user': user_ids, 'user_idx': user2idx[user_ids].values}), on='user', how='inner')
+    # rating_df.sort_values(['user_idx', 'time'], inplace=True)
+    # del rating_df['item'], rating_df['user'] 
 
     lines = rating_df.groupby("user_idx")["item_idx"].apply(list)
     user_seq = []
@@ -198,7 +217,10 @@ def get_user_seqs(data_file):
     max_item = max(item_set)
 
     num_users = len(lines)
-    num_items = max_item + 2
+    if model_name == 'BERT4Rec':
+        num_items = max_item + 1
+    elif model_name == 'SASRec':
+        num_items = max_item + 2
 
     valid_rating_matrix = generate_rating_matrix_valid(user_seq, num_users, num_items)
     test_rating_matrix = generate_rating_matrix_test(user_seq, num_users, num_items)
@@ -215,20 +237,21 @@ def get_user_seqs(data_file):
 
 
 def get_user_seqs_long(data_file):
-    rating_df = pd.read_csv(data_file)
-    item_ids = rating_df['item'].unique()
-    user_ids = rating_df['user'].unique()
-    num_item, num_user = len(item_ids), len(user_ids)
+    df = pd.read_csv(data_file)
+    rating_df = item_encoding(df)
+    # item_ids = rating_df['item'].unique()
+    # user_ids = rating_df['user'].unique()
+    # num_item, num_user = len(item_ids), len(user_ids)
 
-    # user, item indexing
-    item2idx = pd.Series(data=np.arange(len(item_ids))+1, index=item_ids) # item re-indexing (1~num_item), num_item+1: mask idx
-    user2idx = pd.Series(data=np.arange(len(user_ids)), index=user_ids) # user re-indexing (0~num_user-1)
+    # # user, item indexing
+    # item2idx = pd.Series(data=np.arange(len(item_ids))+1, index=item_ids) # item re-indexing (1~num_item), num_item+1: mask idx
+    # user2idx = pd.Series(data=np.arange(len(user_ids)), index=user_ids) # user re-indexing (0~num_user-1)
 
-    # dataframe indexing
-    rating_df = pd.merge(rating_df, pd.DataFrame({'item': item_ids, 'item_idx': item2idx[item_ids].values}), on='item', how='inner')
-    rating_df = pd.merge(rating_df, pd.DataFrame({'user': user_ids, 'user_idx': user2idx[user_ids].values}), on='user', how='inner')
-    rating_df.sort_values(['user_idx', 'time'], inplace=True)
-    del rating_df['item'], rating_df['user'] 
+    # # dataframe indexing
+    # rating_df = pd.merge(rating_df, pd.DataFrame({'item': item_ids, 'item_idx': item2idx[item_ids].values}), on='item', how='inner')
+    # rating_df = pd.merge(rating_df, pd.DataFrame({'user': user_ids, 'user_idx': user2idx[user_ids].values}), on='user', how='inner')
+    # rating_df.sort_values(['user_idx', 'time'], inplace=True)
+    # del rating_df['item'], rating_df['user'] 
 
     lines = rating_df.groupby("user_idx")["item_idx"].apply(list)
     user_seq = []

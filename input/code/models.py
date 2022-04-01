@@ -248,7 +248,7 @@ class BERT4RecModel(nn.Module):
         self.item_encoder = Encoder(args)
         self.LayerNorm = LayerNorm(args.hidden_size, eps=1e-12)
         self.dropout = nn.Dropout(args.hidden_dropout_prob)
-        self.out = nn.Linear(args.hidden_size, args.item_size)
+        self.out = nn.Linear(args.hidden_size, args.item_size - 1)
         self.args = args
 
         #self.criterion = nn.BCELoss(reduction="none")
@@ -269,8 +269,6 @@ class BERT4RecModel(nn.Module):
 
         return sequence_emb
 
-    # Fine tune
-    # same as SASRec
     def forward(self, input_ids):
 
         attention_mask = (input_ids > 0).long()
