@@ -71,6 +71,7 @@ def main():
 
     parser.add_argument("--using_pretrain", action="store_true")
     parser.add_argument("--mask_p", type=float, default=0.15, help="mask probability")
+    parser.add_argument("--rm_position", action="store_true", help="remove position embedding")
     parser.add_argument("--wandb_name", type=str)
 
     # 1. wandb init

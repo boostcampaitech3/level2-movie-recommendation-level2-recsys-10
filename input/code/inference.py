@@ -67,7 +67,8 @@ def main():
     )
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
     parser.add_argument("--mask_p", type=float, default=0.15, help="mask probability")
-
+    parser.add_argument("--rm_position", action="store_true", help="remove position embedding")
+    
     args = parser.parse_args()
 
     set_seed(args.seed)

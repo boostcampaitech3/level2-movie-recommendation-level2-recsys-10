@@ -78,7 +78,7 @@ class S3RecModel(nn.Module):
         return torch.sigmoid(torch.sum(score, dim=-1))  # [B]
 
     #
-    def add_position_embedding(self, sequence):
+    def add_position_embedding(self, sequence, args):
 
         seq_length = sequence.size(1)
         position_ids = torch.arange(
@@ -86,8 +86,13 @@ class S3RecModel(nn.Module):
         )
         position_ids = position_ids.unsqueeze(0).expand_as(sequence)
         item_embeddings = self.item_embeddings(sequence)
-        position_embeddings = self.position_embeddings(position_ids)
-        sequence_emb = item_embeddings + position_embeddings
+        
+        if not args.rm_position:
+            position_embeddings = self.position_embeddings(position_ids)
+            sequence_emb = item_embeddings + position_embeddings
+        else:
+            sequence_emb = item_embeddings
+
         sequence_emb = self.LayerNorm(sequence_emb)
         sequence_emb = self.dropout(sequence_emb)
 
@@ -217,7 +222,7 @@ class S3RecModel(nn.Module):
         )  # fp16 compatibility
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
-        sequence_emb = self.add_position_embedding(input_ids)
+        sequence_emb = self.add_position_embedding(input_ids, self.args)
 
         item_encoded_layers = self.item_encoder(
             sequence_emb, extended_attention_mask, output_all_encoded_layers=True
@@ -254,7 +259,7 @@ class BERT4RecModel(nn.Module):
         #self.criterion = nn.BCELoss(reduction="none")
         self.apply(self.init_weights)
 
-    def add_position_embedding(self, sequence):
+    def add_position_embedding(self, sequence, args):
 
         seq_length = sequence.size(1)
         position_ids = torch.arange(
@@ -262,8 +267,13 @@ class BERT4RecModel(nn.Module):
         )
         position_ids = position_ids.unsqueeze(0).expand_as(sequence)
         item_embeddings = self.item_embeddings(sequence)
-        position_embeddings = self.position_embeddings(position_ids)
-        sequence_emb = item_embeddings + position_embeddings
+
+        if not args.rm_position:
+            position_embeddings = self.position_embeddings(position_ids)
+            sequence_emb = item_embeddings + position_embeddings
+        else:
+            sequence_emb = item_embeddings
+
         sequence_emb = self.LayerNorm(sequence_emb)
         sequence_emb = self.dropout(sequence_emb)
 
@@ -292,7 +302,7 @@ class BERT4RecModel(nn.Module):
         )  # fp16 compatibility
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
-        sequence_emb = self.add_position_embedding(input_ids)
+        sequence_emb = self.add_position_embedding(input_ids, self.args)
 
         item_encoded_layers = self.item_encoder(
             sequence_emb, extended_attention_mask, output_all_encoded_layers=True
