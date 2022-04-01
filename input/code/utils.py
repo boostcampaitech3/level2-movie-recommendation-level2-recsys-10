@@ -35,7 +35,8 @@ def neg_sample(item_set, item_size):
 
 
 
-def neg_sample_popular(popular_item_list, item_set, num_neg = 50, neg_sample_by_pos_sample = False,popular_rate = 0.3):
+def neg_sample_popular(popular_item_list, item_set, num_neg = 50,
+ neg_sample_by_pos_sample = False,popular_rate = 0.3):
     """
     Args:
         popular_item_list (list): 평가된 횟수 순으로 정렬된 list
@@ -43,6 +44,8 @@ def neg_sample_popular(popular_item_list, item_set, num_neg = 50, neg_sample_by_
         num_neg (int): 뽑을 neg_sample 개수 
         neg_sample_by_pos_sample (boolean): Positive와 동일한 수의 negtive sampling을 할지 여부
         popular_rate (float): 상위 몇 %의 item을 중에 선택할 것인가 결정하는 float
+
+    return neg_items : 선택된 item id들의 list
     """
     popular_rate = int(len(popular_item_list)*popular_rate) 
     popular_item_list = popular_item_list[:popular_rate]
