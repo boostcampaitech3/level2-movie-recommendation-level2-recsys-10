@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import scipy.sparse as sp
 
 class NGCF(nn.Module):
-    def __init__(self, n_users, n_items, emb_dim, layers, reg, node_dropout, mess_dropout, adj_mtx, device):
+    def __init__(self, n_users, n_items, emb_dim, layers, reg, node_dropout, mess_dropout, adj_mtx, device, mode = 'train'):
         super().__init__()
         self.device = device
 
@@ -28,6 +28,11 @@ class NGCF(nn.Module):
         # Create Matrix 'L+I', PyTorch sparse tensor of SP adjacency_mtx
         self.L_plus_I = self._convert_sp_mat_to_sp_tensor(self.l_plus_i_matrix)
         self.L = self._convert_sp_mat_to_sp_tensor(self.l_matrix)
+
+        # this is for load_state_dict 
+        if mode == 'submission':
+            self.u_final_embeddings = nn.Parameter(torch.empty(self.n_users, self.emb_dim + sum(self.layers)).to(self.device))
+            self.i_final_embeddings = nn.Parameter(torch.empty(self.n_items, self.emb_dim + sum(self.layers)).to(self.device))
 
     # initialize weights
     def _init_weights(self):
@@ -160,7 +165,7 @@ class NGCF(nn.Module):
             l2norm = (torch.norm(u_emb**2) 
                     + torch.norm(p_emb**2) 
                     + torch.norm(n_emb**2)) / 2 #
-            l2reg = self.reg*l2norm / u_emb.shape[0]           # FILL HERE #
+            l2reg = self.reg*l2norm / u_emb.shape[0]      
             bpr_loss += l2reg
         
         return bpr_loss
