@@ -27,6 +27,7 @@ class BaseDataset(Dataset):
         # data_path는 사용자의 디렉토리에 맞게 설정해야 합니다.
         data_path = os.path.join(self.path, 'train/train_ratings.csv')
         df = pd.read_csv(data_path)
+        self.ratings_df = df.copy() # for submission
         self.n_train = len(df)
 
         item_ids = df['item'].unique() # 아이템 고유 번호 리스트
