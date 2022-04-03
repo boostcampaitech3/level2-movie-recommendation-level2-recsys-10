@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 import wandb
 from trainers import train, eval_model
-from dataset import Data, BaseDataset
+from dataset import BaseDataset
 from models import ngcf, lightgcn
 from utils import early_stopping, set_seed, check_path
 
@@ -143,18 +143,7 @@ def main():
         print(f"[Train] time: {training_time:4.2}s, Loss: {running_loss:4.4}")
         scheduler.step()
 
-
-
-    # ##### train #####  
-    # for epoch in range(args.epochs):
-    #     print('='*20,f' [EPOCH:{epoch:3}/{args.epochs}] ', '='*20)
-    #     t1 = time()
-    #     loss = train(model, GnnDataset, optimizer)
-    #     training_time = time()-t1
-    #     print(f"[Train] time: {training_time:4.2}s, Loss: {loss:4.4}")
-
-
-        # print test evaluation metrics every N epochs (provided by args.eval_N)
+        # print valid evaluation metrics every N epochs (provided by args.eval_N)
         if epoch % args.eval_N  == (args.eval_N - 1):
             with torch.no_grad():
                 t2 = time()
