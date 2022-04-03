@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from models import MF
 from utils import (
     check_path,
+    generate_submission_file,
     get_user_seqs,
     set_seed,
 )
@@ -110,6 +111,7 @@ def main():
     rmse_min = float("inf")
     early_stopping_count = 0
 
+    print(f'{args.model_name} train')
     for epoch in tqdm(range(args.epochs)):
         rmse = model.train()
         
@@ -118,7 +120,7 @@ def main():
         wandb.log({"rmse" : rmse})
 
         if rmse < rmse_min:
-            print(f"rmse min : {rmse}")
+            print(f"rmse min : {rmse:.4f}" )
             rmse_min = rmse
             early_stopping_count = 0
         else:
@@ -127,8 +129,10 @@ def main():
             if early_stopping_count >= args.patience:
                 break
 
+    print(f'{args.model_name} submission')
     pred_list = model.submission()
-
+    
+    print('submission file generate')
     generate_submission_file(args.data_file, pred_list, args.model_name)
 
 

@@ -360,14 +360,14 @@ class MF(object):
     
     def submission(self):
         df = pd.read_csv(self.data_file)
-        rating_df = item_encoding(df)
+        rating_df = item_encoding(df, self.args.model_name)
         items = rating_df['item_idx'].unique()
         users = rating_df['user_idx'].unique()
 
         predicted_user_item_matrix = pd.DataFrame(self.get_predicted_full_matrix(), columns=items, index=users)
 
         for i, user in enumerate(tqdm(users)):
-            rating_pred = predicted_user_item_matrix.loc[user].values.reshape(-1)
+            rating_pred = predicted_user_item_matrix.loc[user].values
 
             rating_pred[self.R[user].toarray().reshape(-1) > 0] = 0
 
@@ -375,7 +375,7 @@ class MF(object):
 
             ind_argsort = np.argsort(rating_pred[ind])[::-1]
 
-            user_pred_list = ind[ind_argsort]
+            user_pred_list = ind[ind_argsort].reshape(1, -1)
 
             if i == 0:
                 pred_list = user_pred_list
