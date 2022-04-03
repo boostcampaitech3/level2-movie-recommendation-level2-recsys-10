@@ -10,7 +10,7 @@ import wandb
 from trainers import train, eval_model
 from dataset import Data, BaseDataset
 from models import ngcf, lightgcn
-from utils import early_stopping, set_seed
+from utils import early_stopping, set_seed, check_path
 
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import StepLR
@@ -38,6 +38,7 @@ def main():
     parser.add_argument("--eval_N", type=int, default=50, help=" ")
 
     parser.add_argument("--data_dir", type=str, default='../data/', help=" ")
+    parser.add_argument("--output_dir", type=str, default='./output', help=" ")
     parser.add_argument("--dataset", type=str, default='', help=" ")
 
     parser.add_argument("--wandb_name", type=str, default='NGCF', help=" ")
@@ -194,11 +195,10 @@ def main():
         date = today.strftime("%d%m%Y_%H%M")
 
         # save model as .pt file
-        if os.path.isdir("./output"):
-            torch.save(model.state_dict(), "./output/" + str(date) + "_" + args.model + "_" + args.dataset + ".pt")
-        else:
-            os.mkdir("./output")
-            torch.save(model.state_dict(), "./output/" + str(date) + "_" + args.model + "_" + args.dataset + ".pt")
+        check_path(args.output_dir)
+        save_file_name = str(date) + "_" + args.model + "_" + args.dataset + ".pt"
+        output_dirs = os.path.join(args.output_dir, save_file_name)
+        torch.save(model.state_dict(), output_dirs)
 
         # save results as pandas dataframe
         results['Epoch'] = results['Epoch'].to('cpu')
@@ -206,13 +206,11 @@ def main():
         results['Recall'] = results['Recall'].to('cpu')
         results['NDCG'] = results['NDCG'].to('cpu')
         results['Training Time'] = results['Training Time'].to('cpu')
+
         results_df = pd.DataFrame(results)
         results_df.set_index('Epoch', inplace=True)
-        if os.path.isdir("./results"):
-            results_df.to_csv("./results/" + str(date) + "_" + args.model + "_" + args.dataset + ".csv")
-        else:
-            os.mkdir("./results")
-            results_df.to_csv("./results/" + str(date) + "_" + args.model + "_" + args.dataset + ".csv")
+        check_path('./results/')
+        results_df.to_csv("./results/" + str(date) + "_" + args.model + "_" + args.dataset + ".csv")
 
 
 if __name__ == "__main__":

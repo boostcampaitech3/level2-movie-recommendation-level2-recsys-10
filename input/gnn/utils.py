@@ -12,6 +12,11 @@ def set_seed(seed):
     # unless you tell it to be deterministic
     torch.backends.cudnn.deterministic = True
 
+def check_path(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
+        print(f"{path} created")
+
 def early_stopping(log_value, best_value, stopping_step, flag_step, expected_order='asc'):
     """
     Check if early_stopping is needed
