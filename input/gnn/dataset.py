@@ -15,7 +15,7 @@ from torch import nn
 from torch.utils.data import Dataset
 
 class BaseDataset(Dataset):
-    def __init__(self, path):
+    def __init__(self, path, mode = 'train'):
         self.path = path # default: '../data/'
 
         #get number of users and items
@@ -60,16 +60,22 @@ class BaseDataset(Dataset):
             # for i in item:
             #     self.R_train[uid, i] = 1.        
             # self.train_items[uid] = item
+            
+            if mode == 'train':
+                num_u_valid_set = min(int(len(item)*0.125), 10) # 유저가 소비한 아이템의 12.5%, 그리고 최대 10개의 데이터셋을 무작위로 Validation Set으로 활용한다.
+                u_valid_set = np.random.choice(item, size=num_u_valid_set, replace=False)
+                for i in set(item) - set(u_valid_set):
+                    self.R_train[uid, i] = 1.
+                self.train_items[uid] = list(set(item) - set(u_valid_set))
 
-            num_u_valid_set = min(int(len(item)*0.125), 10) # 유저가 소비한 아이템의 12.5%, 그리고 최대 10개의 데이터셋을 무작위로 Validation Set으로 활용한다.
-            u_valid_set = np.random.choice(item, size=num_u_valid_set, replace=False)
-            for i in set(item) - set(u_valid_set):
-                self.R_train[uid, i] = 1.
-            self.train_items[uid] = list(set(item) - set(u_valid_set))
-
-            for i in u_valid_set:
-                self.R_test[uid, i] = 1.
-            self.valid_set[uid] = u_valid_set
+                for i in u_valid_set:
+                    self.R_test[uid, i] = 1.
+                self.valid_set[uid] = u_valid_set
+        
+            if mode == 'train_all':
+                for i in item:
+                    self.R_train[uid, i] = 1.
+                self.train_items[uid] = item
 
         print('Complete. Interaction matrices R_train and R_test created in', time() - t1, 'sec')
 
