@@ -1,4 +1,7 @@
 import torch
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
 from utils import split_matrix, compute_ndcg_k
 
 
@@ -74,3 +77,47 @@ def eval_model(u_emb, i_emb, Rtr, Rte, k, device):
         ndcg_k.append(ndcg)
 
     return torch.cat(recall_k).mean(), torch.cat(ndcg_k).mean()
+
+def inference_model(u_emb, i_emb, Rtr, Rte, k,  device):
+    """
+    inference the model
+    
+    Arguments:
+    ---------
+    u_emb: User embeddings
+    i_emb: Item embeddings
+    Rtr: Sparse matrix with the training interactions
+    Rte: Sparse matrix with the testing interactions
+    * R_all: Sparse matrix with the ALL interactions (will be calculated)
+    k : kth-order for submission
+    raw_data_interaction : raw pd.DataFrame(train_ratings.csv) which is implicit interaction between users and items
+    
+    Returns:
+    --------
+    result: Dictionary with lists correponding to the metrics at order k for k in Ks
+    """
+
+    R_all = Rtr + Rte
+
+    # split matrices
+    ue_splits = split_matrix(u_emb)
+    tr_splits = split_matrix(R_all)
+
+    # compute results for split matrices
+    i = 0
+    for ue_f, tr_f in tqdm(zip(ue_splits, tr_splits)):
+        scores = torch.mm(ue_f, i_emb.t())
+
+        non_train_items = torch.from_numpy(1-(tr_f.todense())).float().to(device) # 봤던거는 0
+        scores = scores * non_train_items
+
+        _, test_indices = torch.topk(scores, dim=1, k=k) # test_indices.size = (batch_size: users, k :pred_items)
+
+        if i == 0:
+            results = test_indices
+            i+=1
+        else : 
+            results = torch.cat([results, test_indices], dim=0)
+    
+    return results # list (user, items)
+
