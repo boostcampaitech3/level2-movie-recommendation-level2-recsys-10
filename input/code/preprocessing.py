@@ -93,7 +93,7 @@ def main():
         # to_data 
         output_path = os.path.join(data_dir,'deepfm_train.csv')
         rating_df.drop(columns='time',inplace=True)
-        rating_df.to_csv(output_path, index=False)
+        rating_df.to_json(output_path)
         
         print(f'{args.model} Preprocessing done!!!')
         print(f'the file located in {output_path}')
