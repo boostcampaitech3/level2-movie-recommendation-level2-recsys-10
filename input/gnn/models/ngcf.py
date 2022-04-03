@@ -150,15 +150,17 @@ class NGCF(nn.Module):
         p_emb = i_final_embeddings[i] # positive item embeddings
         n_emb = i_final_embeddings[j] # negative item embeddings
         
-        y_ui =  sum(torch.mul(u_emb, p_emb))               # 힌트 : use torch.mul, sum() method                             
-        y_uj =  sum(torch.mul(u_emb, n_emb))               # 힌트 : use torch.mul, sum() method 
+        y_ui =  torch.sum(torch.mul(u_emb, p_emb), axis=1)               # 힌트 : use torch.mul, sum() method                             
+        y_uj =  torch.sum(torch.mul(u_emb, n_emb), axis=1)               # 힌트 : use torch.mul, sum() method 
         
         
         log_prob =  torch.log(torch.sigmoid(y_ui-y_uj)).mean()           # 힌트 : use torch.log, torch.sigmoid, mean() method
         bpr_loss = -log_prob        
         if self.reg > 0.:
-            l2norm = (torch.sum(u_emb**2)/2. + torch.sum(p_emb**2)/2. + torch.sum(n_emb**2)/2.) / u_emb.shape[0]
-            l2reg = self.reg*l2norm            # FILL HERE #
+            l2norm = (torch.norm(u_emb**2) 
+                    + torch.norm(p_emb**2) 
+                    + torch.norm(n_emb**2)) / 2 #
+            l2reg = self.reg*l2norm / u_emb.shape[0]           # FILL HERE #
             bpr_loss += l2reg
         
         return bpr_loss
