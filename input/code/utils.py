@@ -5,6 +5,10 @@ import random
 
 import numpy as np
 import pandas as pd
+from typing import Union, Tuple, List
+from tqdm import tqdm
+import scipy
+
 import torch
 from scipy.sparse import csr_matrix
 
@@ -152,13 +156,16 @@ def generate_rating_matrix_submission(user_seq, num_users, num_items):
     return rating_matrix
 
 
-def generate_submission_file(data_file, preds):
+def generate_submission_file(data_file, preds, model_name):
 
     rating_df = pd.read_csv(data_file)
     users = rating_df["user"].unique()
     item_ids = rating_df['item'].unique()
     
-    idx2item = pd.Series(data=item_ids, index=np.arange(len(item_ids))+1)  # item idx -> item id
+    if model_name == 'MF':
+        idx2item = pd.Series(data=item_ids, index=np.arange(len(item_ids)))
+    else:  
+        idx2item = pd.Series(data=item_ids, index=np.arange(len(item_ids))+1)  # item idx -> item id
 
     result = []
 
@@ -170,7 +177,34 @@ def generate_submission_file(data_file, preds):
         "output/submission.csv", index=False
     )
 
-def item_encoding(df):
+def generate_implicit_df(df, rating_matrix):
+    user_ids = df['user_idx'].unique()
+    item_ids = df['item_idx'].unique()
+
+    implicit_df = dict()
+    implicit_df['user'] = list()
+    implicit_df['item'] = list()
+    implicit_df['label'] = list()
+    user_dict = dict()
+    item_dict = dict()
+
+    for u, user_id in tqdm(enumerate(user_ids)):
+        user_dict[u] = user_id
+        for i, item_id in enumerate(item_ids):
+            if i not in item_dict:
+                item_dict[i] = item_id
+            implicit_df['user'].append(u)
+            implicit_df['item'].append(i)
+            if pd.isna(ratings_matrix.loc[user_id, item_id]):
+                implicit_df['label'].append(0)
+            else:
+                implicit_df['label'].append(1)
+
+    implicit_df = pd.DataFrame(implicit_df)
+
+    return implicit_df
+
+def item_encoding(df, model_name):
     rating_df = df.copy()
 
     item_ids = rating_df['item'].unique()
@@ -178,7 +212,10 @@ def item_encoding(df):
     num_item, num_user = len(item_ids), len(user_ids)
 
     # user, item indexing
-    item2idx = pd.Series(data=np.arange(len(item_ids))+1, index=item_ids) # item re-indexing (1~num_item), num_item+1: mask idx
+    if model_name == 'MF': 
+        item2idx = pd.Series(data=np.arange(len(item_ids)), index=item_ids) # item re-indexing (0~num_item-1)
+    else:
+        item2idx = pd.Series(data=np.arange(len(item_ids))+1, index=item_ids) # item re-indexing (1~num_item), num_item+1: mask idx
     user2idx = pd.Series(data=np.arange(len(user_ids)), index=user_ids) # user re-indexing (0~num_user-1)
 
     # dataframe indexing
@@ -191,21 +228,8 @@ def item_encoding(df):
 
 def get_user_seqs(data_file, model_name):
     df = pd.read_csv(data_file)
-    rating_df = item_encoding(df)
-    # item_ids = rating_df['item'].unique()
-    # user_ids = rating_df['user'].unique()
-    # num_item, num_user = len(item_ids), len(user_ids)
-
-    # # user, item indexing
-    # item2idx = pd.Series(data=np.arange(len(item_ids))+1, index=item_ids) # item re-indexing (1~num_item), num_item+1: mask idx
-    # user2idx = pd.Series(data=np.arange(len(user_ids)), index=user_ids) # user re-indexing (0~num_user-1)
-
-    # # dataframe indexing
-    # rating_df = pd.merge(rating_df, pd.DataFrame({'item': item_ids, 'item_idx': item2idx[item_ids].values}), on='item', how='inner')
-    # rating_df = pd.merge(rating_df, pd.DataFrame({'user': user_ids, 'user_idx': user2idx[user_ids].values}), on='user', how='inner')
-    # rating_df.sort_values(['user_idx', 'time'], inplace=True)
-    # del rating_df['item'], rating_df['user'] 
-
+    rating_df = item_encoding(df, model_name)
+    
     lines = rating_df.groupby("user_idx")["item_idx"].apply(list)
     user_seq = []
     item_set = set()
@@ -217,10 +241,10 @@ def get_user_seqs(data_file, model_name):
     max_item = max(item_set)
 
     num_users = len(lines)
-    if model_name == 'BERT4Rec':
-        num_items = max_item + 1
-    elif model_name == 'SASRec':
+    if model_name == 'SASRec':
         num_items = max_item + 2
+    else:
+        num_items = max_item + 1
 
     valid_rating_matrix = generate_rating_matrix_valid(user_seq, num_users, num_items)
     test_rating_matrix = generate_rating_matrix_test(user_seq, num_users, num_items)
@@ -236,22 +260,9 @@ def get_user_seqs(data_file, model_name):
     )
 
 
-def get_user_seqs_long(data_file):
+def get_user_seqs_long(data_file, model_name):
     df = pd.read_csv(data_file)
-    rating_df = item_encoding(df)
-    # item_ids = rating_df['item'].unique()
-    # user_ids = rating_df['user'].unique()
-    # num_item, num_user = len(item_ids), len(user_ids)
-
-    # # user, item indexing
-    # item2idx = pd.Series(data=np.arange(len(item_ids))+1, index=item_ids) # item re-indexing (1~num_item), num_item+1: mask idx
-    # user2idx = pd.Series(data=np.arange(len(user_ids)), index=user_ids) # user re-indexing (0~num_user-1)
-
-    # # dataframe indexing
-    # rating_df = pd.merge(rating_df, pd.DataFrame({'item': item_ids, 'item_idx': item2idx[item_ids].values}), on='item', how='inner')
-    # rating_df = pd.merge(rating_df, pd.DataFrame({'user': user_ids, 'user_idx': user2idx[user_ids].values}), on='user', how='inner')
-    # rating_df.sort_values(['user_idx', 'time'], inplace=True)
-    # del rating_df['item'], rating_df['user'] 
+    rating_df = item_encoding(df, model_name)
 
     lines = rating_df.groupby("user_idx")["item_idx"].apply(list)
     user_seq = []
@@ -266,6 +277,76 @@ def get_user_seqs_long(data_file):
 
     return user_seq, max_item, long_sequence
 
+def mf_sgd(
+    P: np.ndarray,
+    Q: np.ndarray,
+    b: float,
+    b_u: np.ndarray,
+    b_i: np.ndarray,
+    samples: List[Tuple],
+    learning_rate: float,
+    regularization: float
+) -> None:
+    """
+    MF 모델의 파라미터를 업데이트하는 SGD를 구현
+    
+    ***********************************************************************************************************
+    SGD:
+        모든 학습 데이터에 대하여
+        1. 현재 주어진 파라미터로 predicted rating을 구함
+        2. 실제 rating과 predicted rating의 차이로 error를 구함
+        3. 2.에서 구한 error를 통해 유저와 아이템의 bias 업데이트 
+        4. 2.에서 구한 error를 통해 유저와 아이템의 잠재 요인 행렬 업데이트 
+    ***********************************************************************************************************
+    
+    :param P: (np.ndarray) 유저의 잠재 요인 행렬. shape: (유저 수, 잠재 요인 수)
+    :param Q: (np.ndarray) 아이템의 잠재 요인 행렬. shape: (아이템 수, 잠재 요인 수)
+    :param b: (float) 글로벌 bias
+    :param b_u: (np.ndarray) 유저별 bias
+    :param b_i: (np.ndarray) 아이템별 bias
+    :param samples: (List[Tuple]) 학습 데이터 (실제 평가를 내린 데이터만 학습에 사용함)
+                    (user_id, item_id, rating) tuple을 element로 하는 list임
+    :param learning_rate: (float) 학습률
+    :param regularization: (float) l2 정규화 파라미터
+    :return: None
+    """
+    for user_id, item_id, rating in tqdm(samples):
+        
+        # 1. 현재 주어진 파라미터로 predicted rating을 구함
+        predicted_rating = P[user_id] @ Q[item_id].T 
+        
+        # 2. 실제 rating과 predicted rating의 차이로 error를 구함
+        error = rating - b - b_u[user_id] - b_i[item_id] - predicted_rating 
+        
+        # 3. 2.에서 구한 error를 통해 유저와 아이템의 bias 업데이트
+        b_u[user_id] += learning_rate * (error - (regularization * b_u[user_id])) 
+        b_i[item_id] += learning_rate * (error - (regularization * b_i[item_id])) 
+        
+        # 4. 2.에서 구한 error를 통해 유저와 아이템의 잠재 요인 행렬 업데이트
+        P[user_id, :] += learning_rate * ((error * Q[item_id, :]) - (regularization * P[user_id, :])) 
+        Q[item_id, :] += learning_rate * ((error * P[user_id, :]) - (regularization * Q[item_id, :])) 
+
+def get_predicted_full_matrix(
+    P: np.ndarray,
+    Q: np.ndarray,
+    b: float = None,
+    b_u: np.ndarray = None,
+    b_i: np.ndarray = None
+) -> np.ndarray:
+    """
+    유저와 아이템의 잠재 요인 행렬과 글로벌, 유저, 아이템 bias를 활용하여 예측된 유저-아이템 rating 매트릭스
+    
+    :param P: (np.ndarray) 유저의 잠재 요인 행렬. shape: (유저 수, 잠재 요인 수)
+    :param Q: (np.ndarray) 아이템의 잠재 요인 행렬. shape: (아이템 수, 잠재 요인 수)
+    :param b: (float) 글로벌 bias
+    :param b_u: (np.ndarray) 유저별 bias
+    :param b_i: (np.ndarray) 아이템별 bias
+    :return: (np.ndarray) 예측된 유저-아이템 rating 매트릭스. shape: (유저 수, 아이템 수)
+    """
+    if b is None:
+        return P @ Q.T 
+    else:
+        return (P @ Q.T) + np.expand_dims(b_i, axis=0) + np.expand_dims(b_u, axis=1) + b 
 
 def get_item2attribute_json(data_file):
     item2attribute = json.loads(open(data_file).readline())
@@ -401,3 +482,22 @@ def idcg_k(k):
         return 1.0
     else:
         return res
+
+def get_rmse(
+    R: np.ndarray,
+    predicted_R: np.ndarray
+) -> float:
+    """
+    전체 학습 데이터(실제 평가를 내린 데이터)에 대한 RMSE를 계산
+    :param R: (np.ndarray) 유저-아이템 rating 매트릭스. shape: (유저 수, 아이템 수)
+    :param predicted_R: (np.ndarray) 예측된 유저-아이템 rating 매트릭스. shape: (유저 수, 아이템 수)
+    :return: (float) 전체 학습 데이터에 대한 RMSE
+    """
+    
+    user_index, item_index, _ = scipy.sparse.find(R) 
+    error = list()
+    for user_id, item_id in tqdm(zip(user_index, item_index), total=len(user_index)):
+        square_error = (predicted_R[user_id, item_id] - R[user_id, item_id]) ** 2 
+        error.append(square_error)
+    rmse = (sum(error) / float(len(error))) ** 0.5 
+    return rmse

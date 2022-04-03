@@ -68,7 +68,7 @@ def main():
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
     parser.add_argument("--mask_p", type=float, default=0.15, help="mask probability")
     parser.add_argument("--rm_position", action="store_true", help="remove position embedding")
-    
+
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -122,7 +122,7 @@ def main():
     print(f"Load model from {args.checkpoint_path} for submission!")
     preds = trainer.submission(0)
 
-    generate_submission_file(args.data_file, preds)
+    generate_submission_file(args.data_file, preds, args.model_name)
 
 
 if __name__ == "__main__":

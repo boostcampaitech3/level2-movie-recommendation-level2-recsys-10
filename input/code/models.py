@@ -1,7 +1,13 @@
 import torch
 import torch.nn as nn
 
+from tqdm import tqdm
+import pandas as pd
+import numpy as np
+import scipy
+
 from modules import Encoder, LayerNorm
+from utils import mf_sgd, get_predicted_full_matrix, get_rmse, item_encoding
 
 
 class S3RecModel(nn.Module):
@@ -86,7 +92,7 @@ class S3RecModel(nn.Module):
         )
         position_ids = position_ids.unsqueeze(0).expand_as(sequence)
         item_embeddings = self.item_embeddings(sequence)
-        
+
         if not args.rm_position:
             position_embeddings = self.position_embeddings(position_ids)
             sequence_emb = item_embeddings + position_embeddings
@@ -283,15 +289,6 @@ class BERT4RecModel(nn.Module):
 
         attention_mask = (input_ids > 0).long()
         extended_attention_mask = attention_mask.unsqueeze(1).repeat(1, input_ids.shape[1], 1).unsqueeze(1).long()
-        # attention_mask = (input_ids > 0).long()
-        # extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(
-        #     2
-        # )  # torch.int64
-        # max_len = attention_mask.size(-1)
-        # attn_shape = (1, max_len, max_len)
-        # subsequent_mask = torch.triu(torch.ones(attn_shape), diagonal=1)  # torch.uint8
-        # subsequent_mask = (subsequent_mask == 0).unsqueeze(1)
-        # subsequent_mask = subsequent_mask.long()
 
         if self.args.cuda_condition:
             extended_attention_mask = extended_attention_mask.cuda()
@@ -324,3 +321,69 @@ class BERT4RecModel(nn.Module):
             module.weight.data.fill_(1.0)
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
+
+class MF(object):
+    
+    def __init__(self, args):
+        self.args = args
+        self.R = self.args.train_matrix
+        self.num_users, self.num_items = self.R.shape
+        self.hidden_size = self.args.hidden_size
+        self.lr = self.args.lr
+        self.l2_reg = self.args.l2_reg
+        self.epochs = self.args.epochs
+        self.data_file = self.args.data_file
+        
+        # 유저, 아이템 잠재 요인 행렬 초기화
+        self.P = np.random.normal(scale=1./self.hidden_size, size=(self.num_users, self.hidden_size))
+        self.Q = np.random.normal(scale=1./self.hidden_size, size=(self.num_items, self.hidden_size))
+
+        # 글로벌, 유저, 아이템 bias 초기화
+        self.b = 0.0
+        self.b_u = np.zeros(self.num_users)
+        self.b_i = np.zeros(self.num_items)
+
+        # 학습 데이터 생성
+        self.I, self.J, self.V = scipy.sparse.find(self.R)
+        self.samples = [
+            (i, j, v) for i, j, v in tqdm(zip(self.I, self.J, self.V), total = len(self.I))]
+
+
+    def train(self):
+        
+        np.random.shuffle(self.samples)
+        mf_sgd(self.P, self.Q, self.b, self.b_u, self.b_i, self.samples, self.lr, self.l2_reg)
+        predicted_R = self.get_predicted_full_matrix()
+        rmse = get_rmse(self.R, predicted_R)
+        
+        return rmse
+    
+    def submission(self):
+        df = pd.read_csv(self.data_file)
+        rating_df = item_encoding(df)
+        items = rating_df['item_idx'].unique()
+        users = rating_df['user_idx'].unique()
+
+        predicted_user_item_matrix = pd.DataFrame(self.get_predicted_full_matrix(), columns=items, index=users)
+
+        for i, user in enumerate(tqdm(users)):
+            rating_pred = predicted_user_item_matrix.loc[user].values.reshape(-1)
+
+            rating_pred[self.R[user].toarray().reshape(-1) > 0] = 0
+
+            ind = np.argpartition(rating_pred, -10)[-10:]
+
+            ind_argsort = np.argsort(rating_pred[ind])[::-1]
+
+            user_pred_list = ind[ind_argsort]
+
+            if i == 0:
+                pred_list = user_pred_list
+
+            else:
+                pred_list = np.append(pred_list, user_pred_list, axis=0)
+
+        return pred_list
+
+    def get_predicted_full_matrix(self):
+        return get_predicted_full_matrix(self.P, self.Q, self.b, self.b_u, self.b_i)

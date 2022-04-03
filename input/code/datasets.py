@@ -254,27 +254,18 @@ class BERT4RecDataset(Dataset):
 
         if self.data_type == "train":
             input_ids = items[:-3]
-            # target_pos = items[1:-2]
             answer = [0]  # no use
 
         elif self.data_type == "valid":
             input_ids = items[:-2]
-            # target_pos = items[1:-1]
             answer = [items[-2]]
 
         elif self.data_type == "test":
             input_ids = items[:-1]
-            # target_pos = items[1:]
             answer = [items[-1]]
         else:
             input_ids = items[:]
-            # target_pos = items[:]  # will not be used
             answer = []
-
-        # target_neg = []
-        # seq_set = set(items)
-        # for _ in input_ids:
-        #     target_neg.append(neg_sample(seq_set, self.args.item_size))
 
         tokens = []
         labels = []
@@ -301,48 +292,20 @@ class BERT4RecDataset(Dataset):
         mask_len = self.max_len - len(tokens)
         tokens = [0] * mask_len + tokens
         labels = [0] * mask_len + labels
-        # input_ids = [0] * pad_len + input_ids
-        # target_pos = [0] * pad_len + target_pos
-        # target_neg = [0] * pad_len + target_neg
 
         tokens = tokens[-self.max_len:]
         labels = labels[-self.max_len:]
-        # input_ids = input_ids[-self.max_len :]
-        # target_pos = target_pos[-self.max_len :]
-        # target_neg = target_neg[-self.max_len :]
 
         assert len(tokens) == self.max_len
         assert len(labels) == self.max_len
-        # assert len(input_ids) == self.max_len
-        # assert len(target_pos) == self.max_len
-        # assert len(target_neg) == self.max_len
 
-        # if self.test_neg_items is not None:
-        #     test_samples = self.test_neg_items[index]
-
-        #     cur_tensors = (
-        #         torch.tensor(user_id, dtype=torch.long),  # user_id for testing
-        #         torch.tensor(input_ids, dtype=torch.long),
-        #         torch.tensor(target_pos, dtype=torch.long),
-        #         torch.tensor(target_neg, dtype=torch.long),
-        #         torch.tensor(answer, dtype=torch.long),
-        #         torch.tensor(test_samples, dtype=torch.long),
-        #     )
-        # else:
         cur_tensors = (
             torch.tensor(user_id, dtype=torch.long),  # user_id for testing
             torch.tensor(tokens, dtype=torch.long),
             torch.tensor(labels, dtype=torch.long),
             torch.tensor(answer, dtype=torch.long),
         )
-            # cur_tensors = (
-            #     torch.tensor(user_id, dtype=torch.long),  # user_id for testing
-            #     torch.tensor(input_ids, dtype=torch.long),
-            #     torch.tensor(target_pos, dtype=torch.long),
-            #     torch.tensor(target_neg, dtype=torch.long),
-            #     torch.tensor(answer, dtype=torch.long),
-            # )
 
         return cur_tensors
 
-    
+ 
