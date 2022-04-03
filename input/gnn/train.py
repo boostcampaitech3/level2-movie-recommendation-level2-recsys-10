@@ -3,6 +3,7 @@ import pandas as pd
 from importlib import import_module
 from time import time
 from datetime import datetime
+from pytz import timezone
 
 from tqdm import tqdm
 
@@ -29,13 +30,13 @@ def main():
     parser.add_argument("--layers", nargs="+", type=int, default=[64, 64, 64], help=" ")
     parser.add_argument("--reg", type=int, default=1e-5, help="default: 1e-5")
     parser.add_argument("--lr", type=float, default=1e-3, help="default: 1e-4") 
-    parser.add_argument("--lr_decay_step", type=int, default=300, help="default: 300") 
+    parser.add_argument("--lr_decay_step", type=int, default=500, help="default: 500") 
 
     parser.add_argument("--node_dropout", type=float, default=0.1, help=" ")
     parser.add_argument("--mess_dropout", type=float, default=0.1, help=" ")
 
     parser.add_argument("--k", type=int, default=10, help=" ")
-    parser.add_argument("--eval_N", type=int, default=50, help=" ")
+    parser.add_argument("--eval_N", type=int, default=100, help=" ")
 
     parser.add_argument("--data_dir", type=str, default='../data/', help=" ")
     parser.add_argument("--output_dir", type=str, default='./output', help=" ")
@@ -109,7 +110,7 @@ def main():
 
     # Set values for early stopping
     cur_best_loss, stopping_step, should_stop = 1e3, 0, False
-    today = datetime.now()
+    today = datetime.now(timezone('Asia/Seoul'))
 
     print("Start at " + str(today))
     print("Using " + str(device) + " for computations")
@@ -170,7 +171,7 @@ def main():
             print(f"[Valid] time: {time()-t2:4.2}s, ", end='')
             print(f"Loss: {running_loss:4.4} | Recall@{args.k}: {recall:.4} | NDCG@{args.k}: {ndcg:.4}")
 
-            cur_best_metric, stopping_step, should_stop = early_stopping(recall, cur_best_metric, stopping_step, flag_step=5)
+            cur_best_metric, stopping_step, should_stop = early_stopping(recall, cur_best_metric, stopping_step, flag_step=20)
 
             # save results in dict
             results['Epoch'].append(epoch)
@@ -192,7 +193,7 @@ def main():
 
     ##### save #####
     if args.save_results:
-        date = today.strftime("%d%m%Y_%H%M")
+        date = today.strftime("%Y%m%d_%H%M")
 
         # save model as .pt file
         check_path(args.output_dir)
