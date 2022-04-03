@@ -34,9 +34,8 @@ def neg_sample(item_set, item_size):
     return item
 
 
-
 def neg_sample_popular(popular_item_list, item_set, num_neg = 50,
- neg_sample_by_pos_sample = False,popular_rate = 0.3):
+ neg_sample_by_pos_sample = False, popular_rate = 0.3):
     """
     Args:
         popular_item_list (list): 평가된 횟수 순으로 정렬된 list
@@ -57,8 +56,6 @@ def neg_sample_popular(popular_item_list, item_set, num_neg = 50,
     neg_items = np.random.choice(popular_item_list, num_neg, replace=False)
 
     return neg_items
-
-    pass
 
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
