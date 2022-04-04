@@ -11,7 +11,7 @@ import wandb
 from trainers import train, eval_model
 from dataset import BaseDataset
 from models import ngcf, lightgcn
-from utils import early_stopping, set_seed, check_path
+from utils import early_stopping, get_lr, set_seed, check_path
 
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import StepLR
@@ -131,9 +131,10 @@ def main():
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
+            current_lr = get_lr(optimizer)
 
         training_time = time()-t1
-        print(f"[EPOCH: {epoch:3}/{args.epochs}] [Train] time: {training_time:4.2}s, Loss: {running_loss:4.4}")
+        print(f"[EPOCH: {epoch:3}/{args.epochs}] [Train] time: {training_time:4.2}s | Loss: {running_loss:4.4} | lr: {current_lr}")
         scheduler.step()
 
         # print valid evaluation metrics every N epochs (provided by args.eval_N)

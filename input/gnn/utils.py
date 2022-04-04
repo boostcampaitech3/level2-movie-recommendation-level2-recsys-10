@@ -17,6 +17,10 @@ def check_path(path):
         os.makedirs(path)
         print(f"{path} created")
 
+def get_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr']
+
 def early_stopping(log_value, best_value, stopping_step, flag_step, expected_order='asc'):
     """
     Check if early_stopping is needed
