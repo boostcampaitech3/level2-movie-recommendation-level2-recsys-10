@@ -70,8 +70,8 @@ def main():
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
 
     parser.add_argument("--using_pretrain", action="store_true")
-    parser.add_argument("--patience", default = 10, type=int, help="early stopping patience")
-
+    parser.add_argument("--patience", default=10, type=int, help="early stopping patience")
+    parser.add_argument("--delta", default=0.001, type=float, help="early stopping delta" )
     parser.add_argument("--wandb_name", type=str)
 
     # 1. wandb init
@@ -119,7 +119,7 @@ def main():
         # 3. wandb log
         wandb.log({"rmse" : rmse})
 
-        if rmse < rmse_min:
+        if rmse < rmse_min - args.delta:
             print(f"rmse min : {rmse:.4f}" )
             rmse_min = rmse
             early_stopping_count = 0
