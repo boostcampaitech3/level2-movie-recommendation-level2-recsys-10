@@ -169,7 +169,7 @@ def generate_submission_file(data_file, preds, model_name):
 
     result = []
 
-    for index, items in enumerate(preds):
+    for index, items in enumerate(tqdm(preds)):
         for item in items:
             result.append((users[index], idx2item[item]))
 
