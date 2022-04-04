@@ -46,6 +46,9 @@ def main():
     parser.add_argument("--save_results", action="store_true")
     parser.set_defaults(save_results=True)
 
+    parser.add_argument("--using_pretrain", action="store_true")
+    parser.add_argument("--checkpoint", type=str, default='latest', help=" ")
+
     args = parser.parse_args()
 
 
@@ -83,6 +86,19 @@ def main():
         device
     ).to(device) # model.cuda()
     # model = torch.nn.DataParallel(model)
+
+    if args.using_pretrain:
+        if args.checkpoint == 'latest':
+            latest_save_pt = max([pt_files for pt_files in os.listdir(args.output_dir) if args.model in pt_files])
+            checkpoint_path = os.path.join(args.output_dir, latest_save_pt)
+            print(f"... Loaded the LATEST Saved pt. PATH: [ {checkpoint_path} ] (model: {args.model}) ...")
+            print()
+        else : 
+            checkpoint_path = os.path.join(args.output_dir, args.checkpoint)
+            print(f"... Loaded the Saved pt. PATH: [ {checkpoint_path} ] (model: {args.model}) ...")
+            print()
+        print(f"Keep training from {checkpoint_path}")
+        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
 
     # -- optimizer
     optimizer = torch.optim.Adam(
@@ -155,7 +171,7 @@ def main():
             print(f"Loss: {running_loss:4.4} | Recall@{args.k}: {recall:.4} | NDCG@{args.k}: {ndcg:.4}")
             print()
 
-            cur_best_metric, stopping_step, should_stop = early_stopping(recall, cur_best_metric, stopping_step, flag_step=20)
+            cur_best_metric, stopping_step, should_stop = early_stopping(recall, cur_best_metric, stopping_step, flag_step=10)
 
             # save results in dict
             results['Epoch'].append(epoch)
@@ -186,11 +202,11 @@ def main():
         torch.save(model.state_dict(), output_dirs)
 
         # save results as pandas dataframe
-        results['Epoch'] = results['Epoch'].to('cpu')
-        results['Loss'] = results['Loss'].to('cpu')
-        results['Recall'] = results['Recall'].to('cpu')
-        results['NDCG'] = results['NDCG'].to('cpu')
-        results['Training Time'] = results['Training Time'].to('cpu')
+        results['Epoch'] = results['Epoch']
+        results['Loss'] = results['Loss']
+        results['Recall'] = results['Recall'].cpu().numpy()
+        results['NDCG'] = results['NDCG'].cpu().numpy()
+        results['Training Time'] = results['Training Time']
 
         results_df = pd.DataFrame(results)
         results_df.set_index('Epoch', inplace=True)
