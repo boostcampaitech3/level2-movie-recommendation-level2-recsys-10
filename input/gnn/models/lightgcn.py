@@ -33,9 +33,8 @@ class LightGCN(nn.Module):
         self.L = self._convert_sp_mat_to_sp_tensor(self.l_matrix)
 
         # this is for load_state_dict 
-        if mode == 'submission':
-            self.u_final_embeddings = nn.Parameter(torch.empty(self.n_users, self.emb_dim).to(self.device))
-            self.i_final_embeddings = nn.Parameter(torch.empty(self.n_items, self.emb_dim).to(self.device))
+        self.u_final_embeddings = nn.Parameter(torch.empty(self.n_users, self.emb_dim).to(self.device))
+        self.i_final_embeddings = nn.Parameter(torch.empty(self.n_items, self.emb_dim).to(self.device))
 
     # weights initialization
     def _init_weights(self):
