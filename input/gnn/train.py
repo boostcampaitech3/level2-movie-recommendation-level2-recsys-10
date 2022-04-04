@@ -29,20 +29,20 @@ def main():
     parser.add_argument("--emb_dim", type=int, default=64, help=" ")
     parser.add_argument("--layers", nargs="+", type=int, default=[64, 64, 64], help=" ")
     parser.add_argument("--reg", type=int, default=1e-5, help="default: 1e-5")
-    parser.add_argument("--lr", type=float, default=1e-3, help="default: 1e-4") 
+    parser.add_argument("--lr", type=float, default=1e-3, help="default: 1e-3") 
     parser.add_argument("--lr_decay_step", type=int, default=500, help="default: 500") 
 
     parser.add_argument("--node_dropout", type=float, default=0.1, help=" ")
     parser.add_argument("--mess_dropout", type=float, default=0.1, help=" ")
 
     parser.add_argument("--k", type=int, default=10, help=" ")
-    parser.add_argument("--eval_N", type=int, default=100, help=" ")
+    parser.add_argument("--eval_N", type=int, default=50, help=" ")
 
     parser.add_argument("--data_dir", type=str, default='../data/', help=" ")
     parser.add_argument("--output_dir", type=str, default='./output', help=" ")
     parser.add_argument("--dataset", type=str, default='', help=" ")
 
-    parser.add_argument("--wandb_name", type=str, default='NGCF', help=" ")
+    parser.add_argument("--wandb_name", type=str, default='-', help=" ")
     parser.add_argument("--save_results", action="store_true")
     parser.set_defaults(save_results=True)
 
@@ -51,7 +51,7 @@ def main():
 
     ##### wandb init #####
     wandb.init(project="movierec_train", entity="egsbj")
-    wandb.run.name = args.wandb_name
+    wandb.run.name = args.model + args.wandb_name
     wandb.config.update(args)
 
     ##### env pre-set #####
@@ -63,9 +63,6 @@ def main():
     device = torch.device("cuda" if use_cuda else "cpu")
 
     ##### model pre-set #####
-    # generate the Normalized-adjacency matrix
-    # data_generator = Data(path= os.path.join(args.data_dir + args.dataset), batch_size= args.batch_size)
-    # adj_mtx = data_generator.get_adj_mat()
     GnnDataset = BaseDataset(path= os.path.join(args.data_dir + args.dataset))
     adj_mtx = GnnDataset.get_adj_mat()
 
@@ -119,28 +116,24 @@ def main():
 
     ##### train #####  
     for epoch in range(args.epochs):
-        print('='*30,f' [EPOCH:{epoch:3}/{args.epochs}] ', '='*30)
+        # print('='*30,f' [EPOCH:{epoch:3}/{args.epochs}] ', '='*30)
         t1 = time()
         model.train()
         running_loss=0
         for idx, train_batch in enumerate(train_loader):
-            # print(f'------------------------------{idx}------------------------------')
             users, pos_items, neg_items = train_batch
             users = users.to(device)
             pos_items = pos_items.to(device)
             neg_items = neg_items.to(device)
-            # print('>>>>>>> size = ', len(users), len(pos_items), len(neg_items))
-            # print(users, pos_items, neg_items)
 
             optimizer.zero_grad()
             loss = model(users, pos_items, neg_items)
-            # print(loss)
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
 
         training_time = time()-t1
-        print(f"[Train] time: {training_time:4.2}s, Loss: {running_loss:4.4}")
+        print(f"[EPOCH: {epoch:3}/{args.epochs}] [Train] time: {training_time:4.2}s, Loss: {running_loss:4.4}")
         scheduler.step()
 
         # print valid evaluation metrics every N epochs (provided by args.eval_N)
@@ -159,6 +152,7 @@ def main():
                 
             print(f"[Valid] time: {time()-t2:4.2}s, ", end='')
             print(f"Loss: {running_loss:4.4} | Recall@{args.k}: {recall:.4} | NDCG@{args.k}: {ndcg:.4}")
+            print()
 
             cur_best_metric, stopping_step, should_stop = early_stopping(recall, cur_best_metric, stopping_step, flag_step=20)
 
