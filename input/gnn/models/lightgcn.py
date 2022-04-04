@@ -1,3 +1,10 @@
+# ref-1. https://github.com/RUCAIBox/RecBole/blob/b7b29954fbc963a406ddbe2f917b4ba56bd7a22b/docs/source/user_guide/model/general/lightgcn.rst#id3
+# Model Hyper-Parameters: (Default)
+# ---------------------------------
+# emb_dim = 64
+# n_layers = 2
+# reg = 1e-5
+
 import torch
 import numpy as np
 from torch import nn

@@ -1,3 +1,13 @@
+# ref-1. https://github.com/RUCAIBox/RecBole/blob/b7b29954fbc963a406ddbe2f917b4ba56bd7a22b/docs/source/user_guide/model/general/ngcf.rst
+# ref-2. ...
+# Model Hyper-Parameters: (Default)
+# ---------------------------------
+# emb_dim = 64
+# layers = [64, 64, 64]
+# node_dropout = 0
+# mess_dropout = 0.1
+# reg = 1e-5
+
 import torch
 import numpy as np
 from torch import nn
