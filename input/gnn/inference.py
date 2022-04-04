@@ -103,13 +103,13 @@ def main():
     # -- save; submission.csv file 
     submission_path = os.path.join(args.output_dir, "submissions")
     check_path(submission_path)
-    file_name = 'submission'
+    file_name = 'submission-' + args.model
     file_ext = '.csv'
     final_path = os.path.join(submission_path, f"{file_name}{file_ext}")
 
     uniq=1
     while os.path.exists(final_path):
-        final_path = os.path.join(submission_path, f"{file_name}{uniq}{file_ext}")
+        final_path = os.path.join(submission_path, f"{file_name}-{uniq}{file_ext}")
         uniq += 1
 
     pd.DataFrame(result, columns=["user", "item"]).to_csv(final_path, index=False)
