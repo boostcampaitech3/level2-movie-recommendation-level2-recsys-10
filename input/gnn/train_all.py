@@ -28,9 +28,10 @@ def main():
     ##### argparser #####
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default='42', help=' ')
+
+    parser.add_argument('--model', type=str, default='NGCF', help='model type (default: NGCF)')
     parser.add_argument("--epochs", type=int, default=3000, help="number of epochs")
     parser.add_argument("--batch_size", type=int, default=1024, help=" ")
-    parser.add_argument('--model', type=str, default='NGCF', help='model type (default: NGCF)')
 
     parser.add_argument("--emb_dim", type=int, default=64, help=" ")
     parser.add_argument("--layers", nargs="+", type=int, default=[64, 64, 64], help=" ")

@@ -71,27 +71,7 @@ class LightGCN(nn.Module):
         res = torch.sparse.FloatTensor(i, v, coo.shape).to(self.device)
         return res
 
-    # apply node_dropout
-    def _droupout_sparse(self, X):
-        """
-        Drop individual locations in X
-        
-        Arguments:
-        ---------
-        X = adjacency matrix (PyTorch sparse tensor)
-        dropout = fraction of nodes to drop
-        noise_shape = number of non non-zero entries of X
-        """
-        node_dropout_mask = ((self.node_dropout) + torch.rand(X._nnz())).floor().bool().to(self.device)
-        i = X.coalesce().indices()
-        v = X.coalesce()._values()
-        i[:,node_dropout_mask] = 0
-        v[node_dropout_mask] = 0
-        X_dropout = torch.sparse.FloatTensor(i, v, X.shape).to(X.device)
-
-        return  X_dropout.mul(1/(1-self.node_dropout))
-
-
+    
     def forward(self, u, i, j):
         """
         Computes the forward pass
@@ -102,13 +82,11 @@ class LightGCN(nn.Module):
         i = positive item (user interacted with item)
         j = negative item (user did not interact with item)
         """
-        L_hat = self._droupout_sparse(self.L) if self.node_dropout > 0 else self.L
-
         ego_embeddings = torch.cat((self.weight_dict['user_embedding'], self.weight_dict['item_embedding']), 0)
         final_embeddings = [ego_embeddings]
 
         for layer_idx in range(self.n_layers):
-            ego_embeddings = torch.sparse.mm(L_hat, ego_embeddings)
+            ego_embeddings = torch.sparse.mm(self.L, ego_embeddings)
             final_embeddings.append(ego_embeddings)
         lightgcn_all_embeddings = torch.stack(final_embeddings, dim=1)
         lightgcn_all_embeddings = torch.mean(lightgcn_all_embeddings, dim=1)
