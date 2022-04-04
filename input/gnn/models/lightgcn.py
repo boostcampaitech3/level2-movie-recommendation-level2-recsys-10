@@ -7,28 +7,22 @@ class LightGCN(nn.Module):
         super().__init__()
         self.device = device
 
-        # config, dataset
-
         # initialize Class attributes TODO (Dataset을 참조하여 불러올 수 있는 부분은 해당 부분을 일괄적으로 수정해주자.)
         self.n_users = n_users
         self.n_items = n_items
         self.emb_dim = emb_dim
         self.l_matrix = adj_mtx
-        # self.l_plus_i_matrix = adj_mtx + sp.eye(adj_mtx.shape[0])
         self.reg = reg
         self.layers = layers
         self.n_layers = len(self.layers)
         self.node_dropout = node_dropout
         self.mess_dropout = mess_dropout
 
-
         # initialize weights
         self.weight_dict = self._init_weights()
         print("Weights initialized.")
 
-
-        # Create Matrix 'L+I', PyTorch sparse tensor of SP adjacency_mtx
-        # self.L_plus_I = self._convert_sp_mat_to_sp_tensor(self.l_plus_i_matrix)
+        # Create Matrix 'L', PyTorch sparse tensor of SP adjacency_mtx
         self.L = self._convert_sp_mat_to_sp_tensor(self.l_matrix)
 
         # this is for load_state_dict 
@@ -44,15 +38,6 @@ class LightGCN(nn.Module):
 
         weight_dict['user_embedding'] = nn.Parameter(initializer(torch.empty(self.n_users, self.emb_dim).to(self.device)))
         weight_dict['item_embedding'] = nn.Parameter(initializer(torch.empty(self.n_items, self.emb_dim).to(self.device)))
-
-        # weight_size_list = [self.emb_dim] + self.layers
-        # for k in range(self.n_layers):
-        #     weight_dict['W_one_%d' %k] = nn.Parameter(initializer(torch.empty(weight_size_list[k], weight_size_list[k+1]).to(self.device)))
-        #     weight_dict['b_one_%d' %k] = nn.Parameter(initializer(torch.empty(1, weight_size_list[k+1]).to(self.device)))
-            
-        #     weight_dict['W_two_%d' %k] = nn.Parameter(initializer(torch.empty(weight_size_list[k], weight_size_list[k+1]).to(self.device)))
-        #     weight_dict['b_two_%d' %k] = nn.Parameter(initializer(torch.empty(1, weight_size_list[k+1]).to(self.device)))
-
         return weight_dict
 
 
@@ -71,25 +56,25 @@ class LightGCN(nn.Module):
         res = torch.sparse.FloatTensor(i, v, coo.shape).to(self.device)
         return res
 
-    # apply node_dropout
-    def _droupout_sparse(self, X):
-        """
-        Drop individual locations in X
+    # Not Need now | apply node_dropout
+    # def _droupout_sparse(self, X):
+    #     """
+    #     Drop individual locations in X
         
-        Arguments:
-        ---------
-        X = adjacency matrix (PyTorch sparse tensor)
-        dropout = fraction of nodes to drop
-        noise_shape = number of non non-zero entries of X
-        """
-        node_dropout_mask = ((self.node_dropout) + torch.rand(X._nnz())).floor().bool().to(self.device)
-        i = X.coalesce().indices()
-        v = X.coalesce()._values()
-        i[:,node_dropout_mask] = 0
-        v[node_dropout_mask] = 0
-        X_dropout = torch.sparse.FloatTensor(i, v, X.shape).to(X.device)
+    #     Arguments:
+    #     ---------
+    #     X = adjacency matrix (PyTorch sparse tensor)
+    #     dropout = fraction of nodes to drop
+    #     noise_shape = number of non non-zero entries of X
+    #     """
+    #     node_dropout_mask = ((self.node_dropout) + torch.rand(X._nnz())).floor().bool().to(self.device)
+    #     i = X.coalesce().indices()
+    #     v = X.coalesce()._values()
+    #     i[:,node_dropout_mask] = 0
+    #     v[node_dropout_mask] = 0
+    #     X_dropout = torch.sparse.FloatTensor(i, v, X.shape).to(X.device)
 
-        return  X_dropout.mul(1/(1-self.node_dropout))
+    #     return  X_dropout.mul(1/(1-self.node_dropout))
 
 
     def forward(self, u, i, j):
@@ -102,13 +87,13 @@ class LightGCN(nn.Module):
         i = positive item (user interacted with item)
         j = negative item (user did not interact with item)
         """
-        L_hat = self._droupout_sparse(self.L) if self.node_dropout > 0 else self.L
+        # L_hat = self._droupout_sparse(self.L) if self.node_dropout > 0 else self.L # Not Need now
 
         ego_embeddings = torch.cat((self.weight_dict['user_embedding'], self.weight_dict['item_embedding']), 0)
         final_embeddings = [ego_embeddings]
 
         for layer_idx in range(self.n_layers):
-            ego_embeddings = torch.sparse.mm(L_hat, ego_embeddings)
+            ego_embeddings = torch.sparse.mm(self.L, ego_embeddings)
             final_embeddings.append(ego_embeddings)
         lightgcn_all_embeddings = torch.stack(final_embeddings, dim=1)
         lightgcn_all_embeddings = torch.mean(lightgcn_all_embeddings, dim=1)
