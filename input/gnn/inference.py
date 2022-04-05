@@ -50,6 +50,10 @@ def main():
         latest_save_pt = max([pt_files for pt_files in os.listdir(args.output_dir) if args.model in pt_files])
         checkpoint_path = os.path.join(args.output_dir, latest_save_pt)
         print(f"... Loaded the LATEST Saved pt. PATH: [ {checkpoint_path} ] (model: {args.model}) ...")
+    else : 
+        checkpoint_path = os.path.join(args.output_dir, args.checkpoint)
+        print(f"... Loaded the Saved pt. PATH: [ {checkpoint_path} ] (model: {args.model}) ...")
+    print()
 
     # -- device
     use_cuda = torch.cuda.is_available()
@@ -113,6 +117,7 @@ def main():
         uniq += 1
 
     pd.DataFrame(result, columns=["user", "item"]).to_csv(final_path, index=False)
+    print(f"Saved as {final_path}")
 
 
 if __name__ == "__main__":

@@ -86,3 +86,11 @@ def compute_ndcg_k(pred_items, test_items, test_indices, k, device):
     
     ndcg[torch.isnan(ndcg)] = 0
     return ndcg
+
+def get_probability_from_arr(arr):
+    """
+        arr (array): _description_
+    """
+    total = sum(arr)
+    probs = [i/total for i in arr]
+    return probs
