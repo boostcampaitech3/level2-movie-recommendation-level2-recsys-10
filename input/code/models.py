@@ -471,6 +471,8 @@ class Implicit_model(object):
         self.model_name = self.args.model_name
         self.bm25 = self.args.bm25
         self.B = self.args.bm25_B
+        self.lr = self.args.lr
+        self.verify_negative_samples = self.args.verify_negative_samples
 
         if self.model_name == 'ALS':
             self.model = AlternatingLeastSquares(
@@ -484,17 +486,19 @@ class Implicit_model(object):
         elif self.model_name == 'BPR':
             self.model = BayesianPersonalizedRanking(
                 factors = self.factors,
+                learning_rate = self.lr,
                 regularization = self.regularization,
                 use_gpu = self.args.cuda_condition,
                 iterations = self.iterations,
-                calculate_training_loss = self.calculate_training_loss,
+                verify_negative_samples = self.verify_negative_samples,
                 random_state = self.random_state
             )
 
         if self.bm25:
             print("weighting matrix by bm25_weight")
             self.user_item_data = (bm25_weight(self.user_item_data, B=self.B)).tocsr()
-    
+
+        print(self.num_items)
     def train(self):
         self.model.fit(self.user_item_data)
     

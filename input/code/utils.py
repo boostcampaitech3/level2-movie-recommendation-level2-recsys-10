@@ -212,7 +212,7 @@ def item_encoding(df, model_name):
     num_item, num_user = len(item_ids), len(user_ids)
 
     # user, item indexing
-    if model_name in ['MF', 'ALS']: 
+    if model_name in ['MF', 'ALS', 'BPR']: 
         item2idx = pd.Series(data=np.arange(len(item_ids)), index=item_ids) # item re-indexing (0~num_item-1)
     else:
         item2idx = pd.Series(data=np.arange(len(item_ids))+1, index=item_ids) # item re-indexing (1~num_item), num_item+1: mask idx
