@@ -21,8 +21,6 @@ from utils import (
 
 
 def main():
-    wandb.init(project="movie_baseline", name="S3Rec_Pretrain")
-    
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--data_dir", default="../data/train/", type=str)
@@ -114,7 +112,6 @@ def main():
     args.item2attribute = item2attribute
 
     model = S3RecModel(args=args)
-    wandb.watch(model)
     trainer = PretrainTrainer(model, None, None, None, None, args)
 
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)

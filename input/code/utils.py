@@ -201,7 +201,8 @@ def get_user_seqs(data_file):
 
     num_users = len(lines)
     num_items = max_item + 2
-
+    
+    # Sparse matrix 만들기
     valid_rating_matrix = generate_rating_matrix_valid(user_seq, num_users, num_items)
     test_rating_matrix = generate_rating_matrix_test(user_seq, num_users, num_items)
     submission_rating_matrix = generate_rating_matrix_submission(

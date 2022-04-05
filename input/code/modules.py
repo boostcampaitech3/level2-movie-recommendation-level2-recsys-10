@@ -99,7 +99,7 @@ class SelfAttention(nn.Module):
         )
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
-
+    # input_tensor : hidden_states
     def forward(self, input_tensor, attention_mask):
         mixed_query_layer = self.query(input_tensor)
         mixed_key_layer = self.key(input_tensor)
@@ -172,17 +172,21 @@ class Layer(nn.Module):
         return intermediate_output
 
 
-class Encoder(nn.Module):
+class Encoder(nn.Module): # 이름만 encoder , decoder 역할임
     def __init__(self, args):
         super(Encoder, self).__init__()
-        layer = Layer(args)
-        self.layer = nn.ModuleList(
+        layer = Layer(args) # layer : 하나의 인코더 블록
+        self.layer = nn.ModuleList(  # 인코더를 여러개 쌓는 형태
             [copy.deepcopy(layer) for _ in range(args.num_hidden_layers)]
         )
 
     def forward(self, hidden_states, attention_mask, output_all_encoded_layers=True):
         all_encoder_layers = []
-        for layer_module in self.layer:
+        for layer_module in self.layer: 
+            '''
+            hidden_states는 input으로, layer 아웃풋이 
+            다음 layer의 인풋으로 들어가게 만듬
+            '''
             hidden_states = layer_module(hidden_states, attention_mask)
             if output_all_encoded_layers:
                 all_encoder_layers.append(hidden_states)

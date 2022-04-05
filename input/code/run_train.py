@@ -4,7 +4,6 @@ import wandb
 
 import numpy as np
 import torch
-import wandb
 
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 
@@ -21,7 +20,6 @@ from utils import (
 
 
 def main():
-    wandb.init(project="movie_train", name="S3Rec_train")
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--data_dir", default="../data/train/", type=str)
@@ -92,6 +90,7 @@ def main():
         args.data_file
     )
 
+    # item 외의 정보들(장르 등을 추가)  
     item2attribute, attribute_size = get_item2attribute_json(item2attribute_file)
 
     args.item_size = max_item + 2
@@ -132,12 +131,13 @@ def main():
     )
 
     model = S3RecModel(args=args)
-    wandb.watch(model)
+    
 
     trainer = FinetuneTrainer(
         model, train_dataloader, eval_dataloader, test_dataloader, None, args
     )
 
+    # pretrain을 쓸지 안쓸지 확인
     print(args.using_pretrain)
     if args.using_pretrain:
         pretrained_path = os.path.join(args.output_dir, "Pretrain.pt")

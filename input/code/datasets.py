@@ -1,10 +1,13 @@
 import random
+import os
+import numpy as np
+import pandas as pd
 
 import torch
 from torch.utils.data import Dataset
-
 from utils import neg_sample
-
+from tqdm import tqdm
+from sklearn.preprocessing import MultiLabelBinarizer
 
 class PretrainDataset(Dataset):
     def __init__(self, args, user_seq, long_sequence):
@@ -213,7 +216,7 @@ class SASRecDataset(Dataset):
                 torch.tensor(user_id, dtype=torch.long),  # user_id for testing
                 torch.tensor(input_ids, dtype=torch.long), # user_id의 영화 리뷰 기록
                 torch.tensor(target_pos, dtype=torch.long), # 한칸씩 밀어낸 pos
-                torch.tensor(target_neg, dtype=torch.long),
+                torch.tensor(target_neg, dtype=torch.long), # 보지 않는 영화 목록, 틀려야 하는 것들
                 torch.tensor(answer, dtype=torch.long), # valid, test 에만 필요함, train에서는 target_pos로 학습
             )
 
@@ -221,3 +224,100 @@ class SASRecDataset(Dataset):
 
     def __len__(self):
         return len(self.user_seq)
+
+
+
+
+
+class WDDataset(Dataset):
+    def __init__(self, path='../data/', mode='train'):
+
+        # data Path
+        self.data_path = os.path.join(path, 'train/train_rating.csv')
+        df = pd.read_csv(self.data_path)
+
+        # for submission
+        self.rating_df = df.copy()
+        self.train_df = len(df)
+
+        # get unique user and tiems
+        self.user_ids, self.item_ids = df['user'].unique(), df['item'].unique()
+
+        # get number of users and items
+        self.n_users, self_n_items = len(self.self.user_ids), len(self.self.item_ids)
+        self.n_train, self.n_test = 0, 0
+        self.neg_pools = {}
+
+        # user, item indexing
+        self.item2idx = pd.Series(data=np.arange(len(self.item_ids)), index=self.item_ids) # item re-indexing
+        self.user2idx = pd.Series(data=np.arange(len(self.user_ids)), index=self.user_ids) # user re-indexing (0~num_user-1)
+
+        # dataframe indexing
+        df = pd.merge(df, pd.DataFrame({'item': self.item_ids, 'item_idx': self.item2idx[self.item_ids].values}), on='item', how='inner')
+        df = pd.merge(df, pd.DataFrame({'user': self.user_ids, 'user_idx': self.user2idx[self.user_ids].values}), on='user', how='inner')
+        df.sort_values(['user_idx', 'time'], inplace=True)
+        del df['item'], df['user'], df['time']
+        
+        self.exist_users = list(df['user_idx'].unique())
+
+        #genre_data to mulit-hot encoding
+        self.genre_df = pd.read_csv(os.path.join(path, 'train/genres.tsv'), sep='\t')
+        self.genre_mulit = genre_items_mulithot(self.genre_df)
+
+        # train, valid set split
+        self.train_set, self.valid_set = train_valid_split(df)
+        
+
+
+
+    def train_valid_split(self, df):
+        items = df.groupby("user_idx")["item_idx"].apply(list)
+        # {"user_id" : [items]}
+        train_set, valid_set = {} , {}
+        print("train_valid set split by user_idx")
+
+        for uid, item in tqdm(enumerate(items)):
+            
+            # 유저가 소비한 item의 12.5% 또는 최대 10 으로 valid_set 아이템 구성
+            num_u_valid_set = min(int(len(item)*0.125), 10)
+            u_valid_set = np.random.choice(item, size=num_u_valid_set, replace=False)
+            
+            train_set[uid] = list(set(item) - set(u_valid_set))
+            valid_set[uid] = u_valid_set
+
+        return train_set, valid_set
+
+
+    def genre_items_mulithot(self, genre_data):
+        # gnre mulit-hot encoding
+        genre_dict = {genre:i for i, genre in enumerate(set(genre_data['genre']))}
+        genre_data['genre']  = genre_data['genre'].map(lambda x : genre_dict[x])
+        sum_genre = list()
+        for item in self.item_ids:
+            sum_genre.append([item, genre_data[genre_data['item']==item]['genre'].values])
+        sum_genre = pd.DataFrame(sum_genre , columns=['item', 'genre'])
+        
+        # Mulit-Labeling
+        mlb = MultiLabelBinarizer()
+        genre_label = mlb.fit_transform(sum_genre['genre'])
+        sum_genre = pd.concat([sum_genre['item'],pd.DataFrame(genre_label, columns=genre_dict)], axis = 1)
+        sum_genre = pd.merge(sum_genre, pd.DataFrame({'item': self.item_ids, 'item_idx': self.item2idx[self.item_ids].values}), on='item', how='inner')
+        sum_genre.sort_values(['item_idx'], inplace=True)
+        del sum_genre['item']
+
+        return sum_genre
+
+    def make_pos_next_items(self, data, idx):
+        # 확률로 positive, negative 분류
+
+        return item_next_data
+
+
+    def __getitem__(self, idx): # idx = batch_size 
+        user = self.exist_users[idx]
+        item_next_data = self.sample_pos_items_for_u(user, 1)[0]
+        return user, item_next_data
+
+    def __len__(self):
+
+        return self.n_users

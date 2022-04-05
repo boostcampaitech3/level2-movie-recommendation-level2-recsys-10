@@ -83,18 +83,20 @@ class Trainer:
         self.model.load_state_dict(torch.load(file_name))
 
     def cross_entropy(self, seq_out, pos_ids, neg_ids):
-        # [batch seq_len hidden_size]
+        # [batch ,  seq_len , hidden_size]
         pos_emb = self.model.item_embeddings(pos_ids)
         neg_emb = self.model.item_embeddings(neg_ids)
-        # [batch*seq_len hidden_size]
+        # [batch*seq_len , hidden_size] , 순서는 그대로 유지하되 일렬로 펼침(3차원에서 2차원으로)
         pos = pos_emb.view(-1, pos_emb.size(2))
         neg = neg_emb.view(-1, neg_emb.size(2))
-        seq_emb = seq_out.view(-1, self.args.hidden_size)  # [batch*seq_len hidden_size]
-        pos_logits = torch.sum(pos * seq_emb, -1)  # [batch*seq_len]
-        neg_logits = torch.sum(neg * seq_emb, -1)
+        seq_emb = seq_out.view(-1, self.args.hidden_size)  # [batch*seq_len , hidden_size]
+        pos_logits = torch.sum(pos * seq_emb, -1)  # [batch*seq_len] , 클수록 좋고
+        neg_logits = torch.sum(neg * seq_emb, -1) # 작을 수록 좋다
+
         istarget = (
             (pos_ids > 0).view(pos_ids.size(0) * self.model.args.max_seq_length).float()
-        )  # [batch*seq_len]
+        )  # 0이 아닌 것들 중에, [batch*seq_len]
+
         loss = torch.sum(
             -torch.log(torch.sigmoid(pos_logits) + 1e-24) * istarget
             - torch.log(1 - torch.sigmoid(neg_logits) + 1e-24) * istarget
@@ -221,7 +223,7 @@ class FinetuneTrainer(Trainer):
             submission_dataloader,
             args,
         )
-
+    # trainer 의 iteration method override
     def iteration(self, epoch, dataloader, mode="train"):
 
         # Setting the tqdm progress bar
@@ -270,7 +272,7 @@ class FinetuneTrainer(Trainer):
                 batch = tuple(t.to(self.device) for t in batch)
                 user_ids, input_ids, _, target_neg, answers = batch
                 recommend_output = self.model.finetune(input_ids)
-
+                # 맨 마지막에 있는 영화들
                 recommend_output = recommend_output[:, -1, :]
 
                 rating_pred = self.predict_full(recommend_output)
@@ -280,7 +282,7 @@ class FinetuneTrainer(Trainer):
                 # implicit 이 1인 경우, rating_pred를 0으로 만들어준다
                 rating_pred[self.args.train_matrix[batch_user_index].toarray() > 0] = 0
 
-                # arpartition으로 
+                # arpartition으로 유사도가 높은 Top-10 의 index를 뽑는다
                 ind = np.argpartition(rating_pred, -10)[:, -10:]
 
                 arr_ind = rating_pred[np.arange(len(rating_pred))[:, None], ind]
