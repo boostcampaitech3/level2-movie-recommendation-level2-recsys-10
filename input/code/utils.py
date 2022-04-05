@@ -162,7 +162,7 @@ def generate_submission_file(data_file, preds, model_name):
     users = rating_df["user"].unique()
     item_ids = rating_df['item'].unique()
     
-    if model_name in ['MF', 'ALS'] :
+    if model_name in ['MF', 'ALS', 'BPR'] :
         idx2item = pd.Series(data=item_ids, index=np.arange(len(item_ids)))
     else:  
         idx2item = pd.Series(data=item_ids, index=np.arange(len(item_ids))+1)  # item idx -> item id

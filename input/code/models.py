@@ -6,8 +6,19 @@ import pandas as pd
 import numpy as np
 import scipy
 
+from implicit.als import AlternatingLeastSquares
+from implicit.bpr import BayesianPersonalizedRanking
+from implicit.lmf import LogisticMatrixFactorization
+from implicit.nearest_neighbours import (
+    BM25Recommender,
+    CosineRecommender,
+    TFIDFRecommender,
+    bm25_weight,
+)
+
 from modules import Encoder, LayerNorm
 from utils import mf_sgd, get_predicted_full_matrix, get_rmse, item_encoding, als, get_ALS_loss
+
 
 
 class S3RecModel(nn.Module):
@@ -443,3 +454,67 @@ class MF_ALS(object):
 
     def get_predicted_full_matrix(self):
         return get_predicted_full_matrix(self.P, self.Q)
+
+class Implicit_model(object):
+    
+    def __init__(self, args):
+        self.args = args
+        self.user_item_data = self.args.train_matrix
+        self.num_users, self.num_items = self.user_item_data.shape
+        self.factors = self.args.hidden_size
+        self.regularization = self.args.regularization
+        self.iterations = self.args.iterations
+        self.calculate_training_loss = self.args.calculate_loss
+        self.random_state = self.args.seed
+        self.data_file = self.args.data_file
+        self.model_name = self.args.model_name
+
+        if self.model_name == 'ALS':
+            self.model = AlternatingLeastSquares(
+                factors = self.factors,
+                regularization = self.regularization,
+                iterations = self.iterations,
+                calculate_training_loss = self.calculate_training_loss,
+                random_state = self.random_state
+            )
+        elif self.model_name == 'BPR':
+            self.model = BayesianPersonalizedRanking(
+                factors = self.factors,
+                regularization = self.regularization,
+                iterations = self.iterations,
+                calculate_training_loss = self.calculate_training_loss,
+                random_state = self.random_state
+            )
+
+    
+    def train(self):
+        self.model.fit(self.user_item_data)
+    
+    def submission(self):
+        df = pd.read_csv(self.data_file)
+        rating_df = item_encoding(df, self.args.model_name)
+        items = rating_df['item_idx'].unique()
+        users = rating_df['user_idx'].unique()
+
+        for idx, user in enumerate(tqdm(users)):
+
+            pred_items, pred_scores = self.model.recommend(user, self.user_item_data[user])
+            
+            # rating_pred = predicted_user_item_matrix.loc[user].values
+
+            # rating_pred[self.R[idx].toarray().reshape(-1) > 0] = 0
+
+            # ind = np.argpartition(rating_pred, -10)[-10:]
+
+
+            # ind_argsort = np.argsort(rating_pred[ind])[::-1]
+
+            # user_pred_list = ind[ind_argsort].reshape(1, -1)
+            
+            if idx == 0:
+                pred_list = [pred_items]
+
+            else:
+                pred_list = np.append(pred_list, [pred_items], axis=0)
+
+        return pred_list
