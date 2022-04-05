@@ -7,7 +7,7 @@ import numpy as np
 import scipy
 
 from modules import Encoder, LayerNorm
-from utils import mf_sgd, get_predicted_full_matrix, get_rmse, item_encoding
+from utils import mf_sgd, get_predicted_full_matrix, get_rmse, item_encoding, als, get_ALS_loss
 
 
 class S3RecModel(nn.Module):
@@ -328,10 +328,9 @@ class MF(object):
         self.args = args
         self.R = self.args.train_matrix
         self.num_users, self.num_items = self.R.shape
-        self.hidden_size = self.args.hidden_size
+        self.hidden_size = self.args.hidden_size_mf
         self.lr = self.args.lr
-        self.l2_reg = self.args.l2_reg
-        self.epochs = self.args.epochs
+        self.l2_reg = self.args.l2_reg_mf
         self.data_file = self.args.data_file
         
         # 유저, 아이템 잠재 요인 행렬 초기화
@@ -366,18 +365,75 @@ class MF(object):
 
         predicted_user_item_matrix = pd.DataFrame(self.get_predicted_full_matrix(), columns=items, index=users)
 
-        for i, user in enumerate(tqdm(users)):
+        for idx, user in enumerate(tqdm(users)):
+
             rating_pred = predicted_user_item_matrix.loc[user].values
 
-            rating_pred[self.R[user].toarray().reshape(-1) > 0] = 0
+            rating_pred[self.R[idx].toarray().reshape(-1) > 0] = 0
 
             ind = np.argpartition(rating_pred, -10)[-10:]
 
             ind_argsort = np.argsort(rating_pred[ind])[::-1]
 
             user_pred_list = ind[ind_argsort].reshape(1, -1)
+            
+            if idx == 0:
+                pred_list = user_pred_list
 
-            if i == 0:
+            else:
+                pred_list = np.append(pred_list, user_pred_list, axis=0)
+
+
+        return pred_list
+
+    def get_predicted_full_matrix(self):
+        return get_predicted_full_matrix(self.P, self.Q, self.b, self.b_u, self.b_i)
+
+class MF_ALS(object):
+    
+    def __init__(self, args):
+        self.args = args
+        self.F = self.args.train_matrix.toarray()
+        self.num_users, self.num_items = self.args.train_matrix.shape
+        self.hidden_size = self.args.hidden_size_als
+        self.alpha = self.args.alpha
+        self.C = 1 + self.alpha * np.copy(self.F)
+        self.l2_reg = self.args.l2_reg_als
+        self.data_file = self.args.data_file
+        
+        # 유저, 아이템 잠재 요인 행렬 초기화
+        self.P = np.random.normal(scale=1./self.hidden_size, size=(self.num_users, self.hidden_size))
+        self.Q = np.random.normal(scale=1./self.hidden_size, size=(self.num_items, self.hidden_size))
+    
+    def train(self):
+        als(self.F, self.P, self.Q, self.C, self.hidden_size, self.l2_reg)
+        loss = get_ALS_loss(self.F, self.P, self.Q, self.C, self.l2_reg)
+        
+        return loss
+    
+    def submission(self):
+        df = pd.read_csv(self.data_file)
+        rating_df = item_encoding(df, self.args.model_name)
+        items = rating_df['item_idx'].unique()
+        users = rating_df['user_idx'].unique()
+
+        predicted_user_item_matrix = pd.DataFrame(self.get_predicted_full_matrix(), columns=items, index=users)
+
+        for idx, user in enumerate(tqdm(users)):
+
+            rating_pred = predicted_user_item_matrix.loc[user].values
+
+            rating_pred[self.R[idx].toarray().reshape(-1) > 0] = 0
+
+            ind = np.argpartition(rating_pred, -10)[-10:]
+
+
+            ind_argsort = np.argsort(rating_pred[ind])[::-1]
+
+            user_pred_list = ind[ind_argsort].reshape(1, -1)
+
+            
+            if idx == 0:
                 pred_list = user_pred_list
 
             else:
@@ -386,4 +442,4 @@ class MF(object):
         return pred_list
 
     def get_predicted_full_matrix(self):
-        return get_predicted_full_matrix(self.P, self.Q, self.b, self.b_u, self.b_i)
+        return get_predicted_full_matrix(self.P, self.Q)

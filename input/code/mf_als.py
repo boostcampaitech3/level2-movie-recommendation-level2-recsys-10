@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 
-from models import MF
+from models import MF, MF_ALS
 from utils import (
     check_path,
     generate_submission_file,
@@ -25,9 +25,12 @@ def main():
     parser.add_argument("--data_name", default="Ml", type=str)
 
     # model args
-    parser.add_argument("--model_name", default="MF", type=str)
+    parser.add_argument("--model_name", default="MF", type=str) # MF, ALS
     parser.add_argument(
-        "--hidden_size", type=int, default=100, help="hidden size of latent vector"
+        "--hidden_size_mf", type=int, default=100, help="hidden size of latent vector(MF)"
+    )
+    parser.add_argument(
+        "--hidden_size_als", type=int, default=200, help="hidden size of latent vector(als)"
     )
     parser.add_argument(
         "--num_hidden_layers", type=int, default=2, help="number of layers"
@@ -47,7 +50,9 @@ def main():
     parser.add_argument("--max_seq_length", default=50, type=int)
     parser.add_argument("--mask_p", type=float, default=0.15, help="mask probability")
     parser.add_argument("--rm_position", action="store_true", help="remove position embedding")
-    parser.add_argument("--l2_reg", default=0.2, type=float, help='l2 regularization')
+    parser.add_argument("--l2_reg_mf", default=0.2, type=float, help='l2 regularization(mf)')
+    parser.add_argument("--l2_reg_als", default=40, type=float, help='l2 regularization(als)')
+    parser.add_argument("--alpha", default=40, type=int, help='confidence matrix alpha')
 
     # train args
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate of adam")
@@ -107,21 +112,25 @@ def main():
     
     if args.model_name == 'MF':
         model = MF(args)
+        model_loss = 'rmse'
+    elif args.model_name =='ALS':
+        model = MF_ALS(args)
+        model_loss = 'als_loss'
 
-    rmse_min = float("inf")
+    loss_min = float("inf")
     early_stopping_count = 0
 
     print(f'{args.model_name} train')
     for epoch in tqdm(range(args.epochs)):
-        rmse = model.train()
+        loss = model.train()
         
-        print("epoch: %d, error = %.4f" % (epoch, rmse))
+        print("epoch: %d, error = %.4f" % (epoch, loss))
         # 3. wandb log
-        wandb.log({"rmse" : rmse})
+        wandb.log({model_loss : loss})
 
-        if rmse < rmse_min - args.delta:
-            print(f"rmse min : {rmse:.4f}" )
-            rmse_min = rmse
+        if loss < loss_min - args.delta:
+            print(f"loss min : {loss:.4f}" )
+            loss_min = loss
             early_stopping_count = 0
         else:
             early_stopping_count += 1

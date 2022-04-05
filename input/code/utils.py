@@ -162,7 +162,7 @@ def generate_submission_file(data_file, preds, model_name):
     users = rating_df["user"].unique()
     item_ids = rating_df['item'].unique()
     
-    if model_name == 'MF':
+    if model_name in ['MF', 'ALS'] :
         idx2item = pd.Series(data=item_ids, index=np.arange(len(item_ids)))
     else:  
         idx2item = pd.Series(data=item_ids, index=np.arange(len(item_ids))+1)  # item idx -> item id
@@ -212,7 +212,7 @@ def item_encoding(df, model_name):
     num_item, num_user = len(item_ids), len(user_ids)
 
     # user, item indexing
-    if model_name == 'MF': 
+    if model_name in ['MF', 'ALS']: 
         item2idx = pd.Series(data=np.arange(len(item_ids)), index=item_ids) # item re-indexing (0~num_item-1)
     else:
         item2idx = pd.Series(data=np.arange(len(item_ids))+1, index=item_ids) # item re-indexing (1~num_item), num_item+1: mask idx
@@ -241,7 +241,7 @@ def get_user_seqs(data_file, model_name):
     max_item = max(item_set)
 
     num_users = len(lines)
-    if model_name == 'SASRec':
+    if model_name in ['SASRec']:
         num_items = max_item + 2
     else:
         num_items = max_item + 1
@@ -347,6 +347,39 @@ def get_predicted_full_matrix(
         return P @ Q.T 
     else:
         return (P @ Q.T) + np.expand_dims(b_i, axis=0) + np.expand_dims(b_u, axis=1) + b 
+
+def als(
+    F: np.ndarray,
+    P: np.ndarray,
+    Q: np.ndarray,
+    C: np.ndarray,
+    K: int,
+    regularization: float
+) -> None:
+    """
+    MF 모델의 파라미터를 업데이트하는 ALS
+    
+    ***********************************************************************************************************
+    ALS:
+        1. 모든 유저에 대하여 유저의 잠재 요인 행렬을 업데이트
+        2. 모든 아이템에 대하여 아이템의 잠재 요일 행렬 업데이트
+    ***********************************************************************************************************
+    
+    :param F: (np.ndarray) 유저-아이템 preference 매트릭스. shape: (유저 수, 아이템 수)
+    :param P: (np.ndarray) 유저의 잠재 요인 행렬. shape: (유저 수, 잠재 요인 수)
+    :param Q: (np.ndarray) 아이템의 잠재 요인 행렬. shape: (아이템 수, 잠재 요인 수)
+    :param C: (np.ndarray) 평점 테이블에 Confidence Level을 적용한 행렬. shape: (유저 수, 아이템 수)
+    :param K: (int) 잠재 요인 수
+    :param regularization: (float) l2 정규화 파라미터
+    :return: None
+    """
+    for user_id, F_user in enumerate(tqdm(F)):
+        C_u = np.diag(C[user_id])
+        P[user_id] = np.linalg.solve(((Q.T @ C_u) @ Q) + (regularization * np.identity(K)), (Q.T @ C_u) @ F_user) # FILL HERE : USE np.linalg.solve()#
+        
+    for item_id, F_item in enumerate(tqdm(F.T)):
+        C_i = np.diag(C[:, item_id])
+        Q[item_id] = np.linalg.solve(((P.T @ C_i) @ P) + (regularization * np.identity(K)), (P.T @ C_i) @ F_item) # FILL HERE : USE np.linalg.solve()#
 
 def get_item2attribute_json(data_file):
     item2attribute = json.loads(open(data_file).readline())
@@ -501,3 +534,38 @@ def get_rmse(
         error.append(square_error)
     rmse = (sum(error) / float(len(error))) ** 0.5 
     return rmse
+
+def get_ALS_loss(
+    F: np.ndarray,
+    P: np.ndarray,
+    Q: np.ndarray,
+    C: np.ndarray,
+    regularization: float
+) -> float:
+    """
+    전체 학습 데이터(실제 평가를 내린 데이터)에 대한 ALS의 Loss를 계산
+    
+    
+    :param F: (np.ndarray) 유저-아이템 preference 매트릭스. shape: (유저 수, 아이템 수)
+    :param P: (np.ndarray) 유저의 잠재 요인 행렬. shape: (유저 수, 잠재 요인 수)
+    :param Q: (np.ndarray) 아이템의 잠재 요인 행렬. shape: (아이템 수, 잠재 요인 수)
+    :param C: (np.ndarray) 평점 테이블에 Confidence Level을 적용한 행렬. shape: (유저 수, 아이템 수)
+    :param regularization: (float) l2 정규화 파라미터
+    :return: (float) 전체 학습 데이터에 대한 Loss
+    """
+    
+    user_index, item_index = F.nonzero()
+    loss = 0
+    for user_id, item_id in tqdm(zip(user_index, item_index), total=len(user_index)):
+        predict_error = (F[user_id, item_id] - (P[user_id].T @ Q[item_id])) ** 2 # FILL HERE #
+        confidence_error = C[user_id, item_id] * predict_error # FILL HERE #
+        loss += confidence_error
+    for user_id in tqdm(range(F.shape[0])):
+        regularization_term = regularization * np.square(np.linalg.norm(P[user_id])) # FILL HERE #
+        loss += regularization_term
+    for item_id in tqdm(range(F.shape[1])):
+        regularization_term = regularization * np.square(np.linalg.norm(Q[item_id])) # FILL HERE #
+        loss += regularization_term
+
+    return loss
+    
