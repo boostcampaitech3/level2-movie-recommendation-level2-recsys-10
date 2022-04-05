@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import scipy
 
+import implicit
 from implicit.als import AlternatingLeastSquares
 from implicit.bpr import BayesianPersonalizedRanking
 from implicit.lmf import LogisticMatrixFactorization
@@ -468,11 +469,14 @@ class Implicit_model(object):
         self.random_state = self.args.seed
         self.data_file = self.args.data_file
         self.model_name = self.args.model_name
+        self.bm25 = self.args.bm25
+        self.B = self.args.bm25_B
 
         if self.model_name == 'ALS':
             self.model = AlternatingLeastSquares(
                 factors = self.factors,
                 regularization = self.regularization,
+                use_gpu = self.args.cuda_condition,
                 iterations = self.iterations,
                 calculate_training_loss = self.calculate_training_loss,
                 random_state = self.random_state
@@ -481,11 +485,15 @@ class Implicit_model(object):
             self.model = BayesianPersonalizedRanking(
                 factors = self.factors,
                 regularization = self.regularization,
+                use_gpu = self.args.cuda_condition,
                 iterations = self.iterations,
                 calculate_training_loss = self.calculate_training_loss,
                 random_state = self.random_state
             )
 
+        if self.bm25:
+            print("weighting matrix by bm25_weight")
+            self.user_item_data = (bm25_weight(self.user_item_data, B=self.B)).tocsr()
     
     def train(self):
         self.model.fit(self.user_item_data)
@@ -499,17 +507,6 @@ class Implicit_model(object):
         for idx, user in enumerate(tqdm(users)):
 
             pred_items, pred_scores = self.model.recommend(user, self.user_item_data[user])
-            
-            # rating_pred = predicted_user_item_matrix.loc[user].values
-
-            # rating_pred[self.R[idx].toarray().reshape(-1) > 0] = 0
-
-            # ind = np.argpartition(rating_pred, -10)[-10:]
-
-
-            # ind_argsort = np.argsort(rating_pred[ind])[::-1]
-
-            # user_pred_list = ind[ind_argsort].reshape(1, -1)
             
             if idx == 0:
                 pred_list = [pred_items]

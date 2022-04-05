@@ -7,10 +7,7 @@ import numpy as np
 
 import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
-import implicit
 
-import warnings
-warnings.filterwarnings(action='ignore')
 
 
 from models import Implicit_model
@@ -33,7 +30,8 @@ def main():
     parser.add_argument("--model_name", default="ALS", type=str) # ALS, BPR
     parser.add_argument("--hidden_size", type=int, default=100, help="The number of latent factors to compute")
     parser.add_argument("--regularization", type=float, default=0.01, help=" The regularization factor to use")
-
+    parser.add_argument("--bm25", action="store_true", help="sparse matrix to bm25 weight")
+    parser.add_argument("--bm25_B", type=float default=0.9, help="bm25 weight B")
     # train args
     parser.add_argument("--iterations", type=int, default=15, help="number of epochs")
     parser.add_argument("--calculate_loss", action="store_false", help="calculate train loss")
@@ -77,9 +75,8 @@ def main():
     print(args.model_name)
 
     model = Implicit_model(args)
+    print(model.model)
 
-    print(implicit.gpu.HAS_CUDA)
-    
     print(f'{args.model_name} train')
     
     model.train()
