@@ -84,14 +84,15 @@ class BaseDataset(Dataset):
 
         print('Complete. Interaction matrices R_train and R_test created in', time() - t1, 'sec')
         
+        # FIXME; Take too much time to return popular negative sampling
         # for Popular negative Sampling | Method(1): prob. = freq.
-        self.train_unseen_items = [] # index: user_id, value: (list)- user unseen items
-        self.train_unseen_items_probs = [] # index: user_id, value: (list)- user unseen items' probabilities (<-frequencies)
-        for user in self.exist_users:
-            train_unseen_items = list(set(self.exist_items) - set(self.train_items[user])) # (list)- user unseen items
-            self.train_unseen_items.append(train_unseen_items)
-            train_unseen_items_counts = [self.item_counter[item] for item in train_unseen_items]
-            self.train_unseen_items_probs.append(get_probability_from_arr(train_unseen_items_counts))
+        # self.train_unseen_items = [] # index: user_id, value: (list)- user unseen items
+        # self.train_unseen_items_probs = [] # index: user_id, value: (list)- user unseen items' probabilities (<-frequencies)
+        # for user in self.exist_users:
+        #     train_unseen_items = list(set(self.exist_items) - set(self.train_items[user])) # (list)- user unseen items
+        #     self.train_unseen_items.append(train_unseen_items)
+        #     train_unseen_items_counts = [self.item_counter[item] for item in train_unseen_items]
+        #     self.train_unseen_items_probs.append(get_probability_from_arr(train_unseen_items_counts))
 
 
     def __len__(self):
@@ -120,22 +121,7 @@ class BaseDataset(Dataset):
                 neg_items.append(neg_id)
         return neg_items
 
-    # def sample_popular_neg_items_for_u(self, u, num):
-    #     neg_items = []
-    #     # self.train_items[u] # 유저 u가 본 영화 리스트 
-    #     # self.exist_items # 전체 아이템 리스트 # TODO 
-    #     non_seen_item = list(set(self.exist_items) - set(self.train_items[u])) # 유저가 안 본 영화 리스트 (영화 번호)
-    #     # non_seen (유저가 안본 영화의 리스트)를 통해서 각 빈도 수를 뽑아 낸다. 
-    #     non_seen_item_counts = [self.item_counter[item] for item in non_seen_item]
-    #     probs_non_seen = get_probability_from_arr(non_seen_item_counts)
-
-    #     while True:
-    #         if len(neg_items) == num: break
-    #         neg_id = np.random.choice(non_seen_item, size = 1, replace = False, p=probs_non_seen)[0]
-    #         if neg_id not in neg_items:
-    #             neg_items.append(neg_id)
-    #     return neg_items
-
+    # FIXME 이 부분을 동적으로 epoch 에 따른 값을 적용시키게 만드려면?
     def sample_popular_neg_items_for_u(self, u, num):
         neg_items = []
         while True:
@@ -145,12 +131,11 @@ class BaseDataset(Dataset):
                 neg_items.append(neg_id)
         return neg_items
 
-    # 이 부분을 동적으로 epoch 에 따른 값을 적용시키게 만드려면? TODO TODO TODO TODO TODO TODO TODO TODO 
     def __getitem__(self, idx):
         # TODO batch size 보다 user의 수가 더 적을 경우??? 일단 이런 경우는 무시하고 진행
         user = self.exist_users[idx]
         pos_item = self.sample_pos_items_for_u(user, 1)[0]
-        neg_item = self.sample_neg_items_for_u(user, 1)[0] if np.random.uniform(0,1,1) < 0.5 else self.sample_popular_neg_items_for_u(user, 1)[0]
+        neg_item = self.sample_neg_items_for_u(user, 1)[0] #if np.random.uniform(0,1,1) < 0.5 else self.sample_popular_neg_items_for_u(user, 1)[0]
         return user, pos_item, neg_item
 
     # if exist, get adjacency matrix
