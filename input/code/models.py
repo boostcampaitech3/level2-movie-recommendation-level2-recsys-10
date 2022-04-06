@@ -473,6 +473,7 @@ class Implicit_model(object):
         self.B = self.args.bm25_B
         self.lr = self.args.lr
         self.verify_negative_samples = self.args.verify_negative_samples
+        self.neg_prop = self.args.neg_prop
 
         if self.model_name == 'ALS':
             self.model = AlternatingLeastSquares(
@@ -494,11 +495,30 @@ class Implicit_model(object):
                 random_state = self.random_state
             )
 
+        elif self.model_name == 'LMF':
+            self.model = LogisticMatrixFactorization(
+                factors = self.factors,
+                learning_rate = self.lr,
+                regularization = self.regularization,
+                iterations = self.iterations,
+                neg_prop = self.neg_prop,
+                random_state = self.random_state,
+            )
+        
+        elif self.model_name == 'TFIDF':
+            self.model = TFIDFRecommender()
+        
+        elif self.model_name == 'COSINE':
+            self.model = CosineRecommender()
+
+        elif self.model_name == 'BM25':
+            self.model = BM25Recommender(B=self.B)
+
+
         if self.bm25:
             print("weighting matrix by bm25_weight")
             self.user_item_data = (bm25_weight(self.user_item_data, B=self.B)).tocsr()
 
-        print(self.num_items)
     def train(self):
         self.model.fit(self.user_item_data)
     

@@ -137,7 +137,7 @@ def generate_rating_matrix_test(user_seq, num_users, num_items):
     return rating_matrix
 
 
-def generate_rating_matrix_submission(user_seq, num_users, num_items):
+def generate_rating_matrix_submission(user_seq, num_users, num_items, model_name):
     # three lists are used to construct sparse matrix
     row = []
     col = []
@@ -151,7 +151,10 @@ def generate_rating_matrix_submission(user_seq, num_users, num_items):
     row = np.array(row)
     col = np.array(col)
     data = np.array(data)
-    rating_matrix = csr_matrix((data, (row, col)), shape=(num_users, num_items))
+    if model_name in ['TFIDF', 'COSINE', 'BM25']:
+        rating_matrix = csr_matrix((data.astype(np.float32), (row, col)), shape=(num_users, num_items))
+    else:
+        rating_matrix = csr_matrix((data, (row, col)), shape=(num_users, num_items))
 
     return rating_matrix
 
@@ -162,7 +165,7 @@ def generate_submission_file(data_file, preds, model_name):
     users = rating_df["user"].unique()
     item_ids = rating_df['item'].unique()
     
-    if model_name in ['MF', 'ALS', 'BPR'] :
+    if model_name in ['MF', 'ALS', 'BPR', 'LMF', 'TFIDF', 'COSINE', 'BM25'] :
         idx2item = pd.Series(data=item_ids, index=np.arange(len(item_ids)))
     else:  
         idx2item = pd.Series(data=item_ids, index=np.arange(len(item_ids))+1)  # item idx -> item id
@@ -212,7 +215,7 @@ def item_encoding(df, model_name):
     num_item, num_user = len(item_ids), len(user_ids)
 
     # user, item indexing
-    if model_name in ['MF', 'ALS', 'BPR']: 
+    if model_name in ['MF', 'ALS', 'BPR', 'LMF', 'TFIDF', 'COSINE', 'BM25']: 
         item2idx = pd.Series(data=np.arange(len(item_ids)), index=item_ids) # item re-indexing (0~num_item-1)
     else:
         item2idx = pd.Series(data=np.arange(len(item_ids))+1, index=item_ids) # item re-indexing (1~num_item), num_item+1: mask idx
@@ -249,7 +252,7 @@ def get_user_seqs(data_file, model_name):
     valid_rating_matrix = generate_rating_matrix_valid(user_seq, num_users, num_items)
     test_rating_matrix = generate_rating_matrix_test(user_seq, num_users, num_items)
     submission_rating_matrix = generate_rating_matrix_submission(
-        user_seq, num_users, num_items
+        user_seq, num_users, num_items, model_name
     )
     return (
         user_seq,

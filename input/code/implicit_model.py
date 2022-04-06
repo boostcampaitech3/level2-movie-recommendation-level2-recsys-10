@@ -27,20 +27,21 @@ def main():
     parser.add_argument("--data_name", default="Ml", type=str)
 
     # model args
-    parser.add_argument("--model_name", default="ALS", type=str) # ALS, BPR
-    parser.add_argument("--hidden_size", type=int, default=100, help="The number of latent factors to compute")
-    parser.add_argument("--regularization", type=float, default=0.01, help=" The regularization factor to use")
-    parser.add_argument("--bm25", action="store_true", help="sparse matrix to bm25 weight")
-    parser.add_argument("--bm25_B", type=float, default=0.9, help="bm25 weight B")
+    parser.add_argument("--model_name", default="ALS", type=str) # ALS, BPR, LMF
+    parser.add_argument("--hidden_size", type=int, default=100, help="The number of latent factors to compute") # ALS, BPR : 100, LMF = 30
+    parser.add_argument("--regularization", type=float, default=0.01, help=" The regularization factor to use") # ALS, BPR : 0.01, LMF = 0.6
+    parser.add_argument("--bm25", action="store_true", help="sparse matrix to bm25 weight") 
+    parser.add_argument("--bm25_B", type=float, default=0.9, help="bm25 weight B") # bm25_weight : 0.9, bm25 model 0.2
     # train args
-    parser.add_argument("--iterations", type=int, default=100, help="number of epochs")
-    parser.add_argument("--calculate_loss", action="store_false", help="calculate train loss")
+    parser.add_argument("--iterations", type=int, default=15, help="number of epochs") # ALS : 15, BPR : 100, LMF = 30
+    parser.add_argument("--calculate_loss", action="store_false", help="calculate train loss") # ALS
     parser.add_argument("--no_cuda", action="store_true")
     parser.add_argument("--log_freq", type=int, default=1, help="per epoch print res")
     parser.add_argument("--seed", default=42, type=int)
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
-    parser.add_argument("--lr", type=float, default=0.01, help="learning rate of bpr")
+    parser.add_argument("--lr", type=float, default=0.01, help="learning rate") # bpr : 0.01, LMF = 1.00
     parser.add_argument("--verify_negative_samples", action="store_false", help="verify negative sample")
+    parser.add_argument("--neg_prop", type=int, default=30, help="The proportion of negative samples.")
     # parser.add_argument("--wandb_name", type=str)
 
     # 1. wandb init
@@ -48,6 +49,7 @@ def main():
     args = parser.parse_args()
     # wandb.init(project="movierec_train", entity="egsbj")
     # wandb.run.name = args.wandb_name
+
 
     # # 2. wandb config
     # wandb.config.update(args)
