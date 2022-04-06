@@ -37,7 +37,7 @@ parser.add_argument('--n_epochs', type=int, default=50)
 parser.add_argument('--n-enc_epochs', type=int, default=3)
 parser.add_argument('--n-dec_epochs', type=int, default=1)
 parser.add_argument('--not-alternating', type=bool, default=False)
-parser.add_argument("--eval_N", type=int, default=50, help=" ")
+parser.add_argument("--eval_N", type=int, default=1, help=" ")
 parser.add_argument("--k", type=int, default=10, help=" ")
 
 # path
@@ -94,29 +94,47 @@ print("Using " + str(device) + " for computations")
 print("Params on CUDA: " + str(next(model.parameters()).is_cuda))
 results = {"Epoch": [], "Loss": [], "Valid_Loss":[], "Recall": [], "NDCG": [], "Training Time": []}
 
+def trainer(model, opts, train_loader, n_epochs, beta=None, gamma=1):
+    temp_total_loss = 0.0
+    model.train()
+    for epoch in range(n_epochs):
+        for batch_index, batch_data in enumerate(train_loader):
+            input_data = batch_data.to(device)
+
+            for optimizer in opts:
+                optimizer.zero_grad()
+
+            recon_batch, mu, logvar = model(input_data)
+            _, loss = model.loss_function(recon_batch, input_data, mu, logvar, beta=beta, gamma=gamma)
+            loss.backward()
+
+            for optimizer in opts:
+                optimizer.step()
+            
+            temp_total_loss += loss.item()
+
+    return loss
+
 ###### train & validation ##### 
-model.train()
 running_loss = 0.0
 for epoch in range(args.epochs):
     # -- train
     t1 = time()
-    model.train()
-    for batch_index, batch_data in enumerate(train_loader):
-        input_data = batch_data.to(device)
 
-        for optimizer in opts:
-            optimizer.zero_grad()
+    if args.not_alternating:
+        model.dropout_rate = 0.5
+        loss = trainer(model, opts=[optimizer_encoder, optimizer_decoder], n_epochs=1)
+        running_loss += loss
+    else:
+        model.dropout_rate = 0.5
+        enc_loss = trainer(model, opts=[optimizer_encoder], train_loader=train_loader, n_epochs=args.n_enc_epochs)
+        model.update_prior()
+        model.dropout_rate = 0
+        dec_loss = trainer(model, opts=[optimizer_decoder], train_loader=train_loader, n_epochs=args.n_dec_epochs)        
 
-        recon_batch, mu, logvar = model(input_data)
-        _, loss = model.loss_function(recon_batch, input_data, mu, logvar, gamma=1, beta=None)
-        loss.backward()
+        running_loss += enc_loss+dec_loss # TODO 각각의 학습 정도를 확인하기위해 이정도는 print로 찍어줄까?
 
-        for optimizer in opts:
-            optimizer.step()
-        
-        running_loss += loss.item()
-
-    current_lr = get_lr(optimizer)
+    current_lr = get_lr(optimizer_decoder)
     training_time = time()-t1
     print(f"[EPOCH: {epoch:3}/{args.epochs}] [Train] time: {training_time:4.2}s | Loss: {running_loss:4.4} | lr: {current_lr}")
 
