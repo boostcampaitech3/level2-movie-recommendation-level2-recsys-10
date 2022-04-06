@@ -228,29 +228,35 @@ class SASRecDataset(Dataset):
 
 
 
-
 class WDDataset(Dataset):
     def __init__(self, path='../data/', mode='train'):
 
+        #self.args = args
+        self.mode = mode
         # data Path
-        self.data_path = os.path.join(path, 'train/train_rating.csv')
-        df = pd.read_csv(self.data_path)
-
+        #self.data_path = os.path.join(path, 'train/train_ratings.csv')
+        df = pd.read_csv("/opt/ml/worksapce/level2-movie-recommendation-level2-recsys-10/input/data/train/train_ratings.csv")        
+        # df = pd.read_csv(self.data_path)
+        
         # for submission
-        self.rating_df = df.copy()
-        self.train_df = len(df)
+        #self.rating_df = df.copy()
+        #self.train_df = len(df)
 
         # get unique user and tiems
-        self.user_ids, self.item_ids = df['user'].unique(), df['item'].unique()
-
+        self.user_ids = df['user'].unique()
+        self.item_ids = df['item'].unique()
+        
         # get number of users and items
-        self.n_users, self_n_items = len(self.self.user_ids), len(self.self.item_ids)
+        self.n_users, self.n_items = len(self.user_ids), len(self.item_ids)
         self.n_train, self.n_test = 0, 0
         self.neg_pools = {}
 
         # user, item indexing
-        self.item2idx = pd.Series(data=np.arange(len(self.item_ids)), index=self.item_ids) # item re-indexing
-        self.user2idx = pd.Series(data=np.arange(len(self.user_ids)), index=self.user_ids) # user re-indexing (0~num_user-1)
+        # item2idx : {data : 0~item_num , "index" : 기존 번호}
+        #self.item2idx = {"data" : np.arange(len(self.item_ids)), "index" : self.item_ids}
+        self.item2idx = pd.Series(data=np.arange(self.n_items), index=self.item_ids) # item re-indexing
+        # user2idx : {data }
+        self.user2idx = pd.Series(data=np.arange(self.n_users), index=self.user_ids) # user re-indexing (0~num_user-1)
 
         # dataframe indexing
         df = pd.merge(df, pd.DataFrame({'item': self.item_ids, 'item_idx': self.item2idx[self.item_ids].values}), on='item', how='inner')
@@ -258,34 +264,18 @@ class WDDataset(Dataset):
         df.sort_values(['user_idx', 'time'], inplace=True)
         del df['item'], df['user'], df['time']
         
+        # user의 index 번호 저장
         self.exist_users = list(df['user_idx'].unique())
 
         #genre_data to mulit-hot encoding
-        self.genre_df = pd.read_csv(os.path.join(path, 'train/genres.tsv'), sep='\t')
-        self.genre_mulit = genre_items_mulithot(self.genre_df)
+        genre_df = pd.read_csv("/opt/ml/worksapce/level2-movie-recommendation-level2-recsys-10/input/data/train/genres.tsv", sep='\t')
+        #genre_df = pd.read_csv(os.path.join(path, 'train/genres.tsv'), sep='\t')
 
-        # train, valid set split
-        self.train_set, self.valid_set = train_valid_split(df)
-        
+        # genre_mulit = DataFrame(genres, item_idx)
+        self.genre_mulit = self.genre_items_mulithot(genre_df)
 
-
-
-    def train_valid_split(self, df):
-        items = df.groupby("user_idx")["item_idx"].apply(list)
-        # {"user_id" : [items]}
-        train_set, valid_set = {} , {}
-        print("train_valid set split by user_idx")
-
-        for uid, item in tqdm(enumerate(items)):
-            
-            # 유저가 소비한 item의 12.5% 또는 최대 10 으로 valid_set 아이템 구성
-            num_u_valid_set = min(int(len(item)*0.125), 10)
-            u_valid_set = np.random.choice(item, size=num_u_valid_set, replace=False)
-            
-            train_set[uid] = list(set(item) - set(u_valid_set))
-            valid_set[uid] = u_valid_set
-
-        return train_set, valid_set
+        # train, valid split
+        self.datasets = self.train_valid_split(df)
 
 
     def genre_items_mulithot(self, genre_data):
@@ -304,20 +294,76 @@ class WDDataset(Dataset):
         sum_genre = pd.merge(sum_genre, pd.DataFrame({'item': self.item_ids, 'item_idx': self.item2idx[self.item_ids].values}), on='item', how='inner')
         sum_genre.sort_values(['item_idx'], inplace=True)
         del sum_genre['item']
+        
+        return sum_genre 
 
-        return sum_genre
+    def train_valid_split(self, df):
+        items = df.groupby("user_idx")["item_idx"].apply(list)
+        # {"user_id" : [items]}
+        train_set, valid_set = {} , {}
+        print("train_valid set split by user_idx")
 
-    def make_pos_next_items(self, data, idx):
-        # 확률로 positive, negative 분류
+        for uid, item in tqdm(enumerate(items)):
+            
+            # 유저가 소비한 item의 12.5% 또는 최대 10 으로 valid_set 아이템 구성
+            num_u_valid_set = min(int(len(item)*0.125), 10)
+            u_valid_set = np.random.choice(item, size=num_u_valid_set, replace=False)
+            
+            train_set[uid] = list(set(item) - set(u_valid_set))
+            valid_set[uid] = u_valid_set
 
-        return item_next_data
+        # mode에 따라 반환하는 데이터가 다름
+        if self.mode == "train":
+            return train_set
+        elif self.mode == "valid":
+            return valid_set
+        
+
+    def make_pos_next_items(self, user):
+        # 해당 user의 리스트를 positive, negative 분류
+        mask_prob = self.args.mask_prob
+        seq = self.datasets[user]
+        datasets = set(self.datasets.values())
+        
+        tokens = []
+
+        for s in seq: # user의 모든 items sets을 가지고 구성     
+            negative_items = np.random.choice(list(datasets - set(seq)), self.args.num_negative, replace=False)
+            token_in = [user, s] # [user, item]
+            item_genres = self.genre_mulit[self.genre_mulit["item_idx"]==s].iloc[:,1:].values.tolist()
+            seq.remove(s)
+            if len(seq) != 1: # seq이 마지막이면 pass
+                for q in seq: # s와 나머지 items간의 positive 관계 만들기
+                    token_in.extend([q, 1])
+                    # item genres, next_genres
+                    token_in.extend(*item_genres) 
+                    token_in.extend(*(self.genre_mulit[self.genre_mulit["item_idx"]==q].iloc[:,1:].values.tolost()))
+                    
+                    tokens.append(token_in)
+                    token_in = [user, s]
+
+            for negative in negative_items: # negative 만큼 뽑기
+                token_in.extend([negative, 0]) 
+                token_in.extend(*item_genres)
+                token_in.extend(*(self.genre_mulit[self.genre_mulit["item_idx"]==negative].iloc[:,1:].values.tolost()))
+                
+                tokens.append(token_in)
+                token_in = [user, s]
+
+        # [user, item, next, label, item_genres, next_genres] 해당 유저의 경우의 수를 return
+        return tokens 
 
 
     def __getitem__(self, idx): # idx = batch_size 
+        # train, valid set split
+        
         user = self.exist_users[idx]
-        item_next_data = self.sample_pos_items_for_u(user, 1)[0]
-        return user, item_next_data
+        item_next_data = self.make_pos_next_items(user)
+
+        return item_next_data
 
     def __len__(self):
 
         return self.n_users
+
+data = WDDataset()
