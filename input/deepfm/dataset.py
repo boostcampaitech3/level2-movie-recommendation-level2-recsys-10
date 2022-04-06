@@ -2,6 +2,7 @@ import random
 
 import torch
 from torch.utils.data import Dataset
+import pandas as pd
 
 from utils import neg_sample
 
@@ -19,7 +20,7 @@ class DeepFMDataset(Dataset):
                                         self.year_col.unsqueeze(1), self.genre_col], dim=1).long()
         self.target_tensor = torch.tensor(list(self.df.loc[:, 'rating'])).long()
         
-    def __len__(self,index):
+    def __len__(self):
         return self.target_tensor.size(0)
         
     def __getitem__(self,index):

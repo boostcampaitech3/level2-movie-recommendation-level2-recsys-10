@@ -1,4 +1,3 @@
-from turtle import forward
 import torch
 import torch.nn as nn
 
@@ -10,15 +9,15 @@ class DeepFM(nn.Module):
         # Fm component의 constant bias term과 1차 bias term
         self.bias = nn.Parameter(torch.zeros((1,)))
         self.fc = nn.Embedding(total_input_dim, 1)
-        self.linear = nn.Linear(18,1) # 장르를 리니어로
+        self.linear = nn.Linear(in_features  = 18, out_features = embedding_dim, bias = False) # 장르를 리니어로
 
         self.embedding = nn.Embedding(total_input_dim, embedding_dim) 
-        self.embedding_dim = len(input_dims) * embedding_dim
+        self.embedding_dim = (len(input_dims)+1) * embedding_dim # 장르를 추가해서 1더한것 더이상 추가하면 큰일남
 
         mlp_layers = []
         for i, dim in enumerate(mlp_dims):
             if i==0:
-                mlp_layers.append(nn.Linear(self.embedding_dim, dim))
+                mlp_layers.append(nn.Linear(self.embedding_dim, dim)) # embedding_dim에 장르의 크기를 더해주어야 함
             else:
                 mlp_layers.append(nn.Linear(mlp_dims[i-1], dim)) 
             mlp_layers.append(nn.ReLU(True))
@@ -28,30 +27,32 @@ class DeepFM(nn.Module):
 
     def fm(self, x):
         # x : (batch_size, total_num_input)
-        x , genre = x[:-18], x[-18:]
-        embed_x = self.embedding(x)
-        embed_x = torch.cat([embed_x, genre], axis = 1)
+        x , genre = x[:, :-18], x[:, -18:].to(torch.float32)
+        embed_x = self.embedding(x)  # [50,3,10]
+        embeded_genre = self.linear(genre).unsqueeze(1) # [50,1,10]
+        input = torch.cat([embed_x, embeded_genre], dim = 1)  # [50,4,10]
 
-        fm_y = self.bias + torch.sum(self.fc(x), dim=1) + self.linear(genre)
-        square_of_sum = torch.sum(embed_x, dim=1) ** 2        
-        sum_of_square = torch.sum(embed_x ** 2, dim=1)         
-        fm_y += 0.5 * torch.sum(square_of_sum - sum_of_square, dim=1, keepdim=True)
+        # fm_y = (self.bias + torch.sum(self.fc(x), dim=1) + self.linear(genre).squeeze(-1)).unsqueeze(1) # [50,1]
+        fm_y = self.bias + torch.sum(self.fc(x), dim=1) + torch.sum(embeded_genre, dim = 2) # [50,1]
+        # print(fm_y, fm_y.size())
+        square_of_sum = torch.sum(input, dim=1) ** 2  # [50,10]       
+        sum_of_square = torch.sum(input ** 2, dim=1)  # [50,10]          
+        fm_y += 0.5 * torch.sum(square_of_sum - sum_of_square, dim=1, keepdim=True) #[50,1] 
         return fm_y
     
     def mlp(self, x):
-        x , genre = x[:-18], x[-18:]
+        x , genre = x[:, :-18], x[:, -18:].to(torch.float32)
         embed_x = self.embedding(x)
-        
-        inputs = torch.cat([embed_x.view(-1, self.embedding_dim), genre], axis = 1) 
-        mlp_y = self.mlp_layers(inputs)
+        embeded_genre = self.linear(genre).unsqueeze(1)
+        input = torch.cat([embed_x, embeded_genre], dim = 1).view(-1, self.embedding_dim)  # [50,4,10] -> [50, 40]
+
+        mlp_y = self.mlp_layers(input)
         return mlp_y
 
     def forward(self, x):
         #fm component
-        fm_y = self.fm(x).squeeze(1)
-        
+        fm_y = self.fm(x).squeeze(1) # [50,1] -> [50]
         #deep component
-        mlp_y = self.mlp(x).squeeze(1)
-        
+        mlp_y = self.mlp(x).squeeze(1) #  [50,1] -> [50]
         y = torch.sigmoid(fm_y + mlp_y)
         return y
