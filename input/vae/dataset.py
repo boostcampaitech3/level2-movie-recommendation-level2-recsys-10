@@ -51,8 +51,8 @@ class BaseDataset(Dataset):
                 num_u_valid_items = min(int(len(item)*0.125), 10) # 유저가 소비한 아이템의 12.5%, 그리고 최대 10개의 데이터셋을 무작위로 Validation Set으로 활용한다.
                 u_valid_items = np.random.choice(item, size=num_u_valid_items, replace=False)
                 self.valid_items[uid] = u_valid_items
-                if len(item) <= 1000 and len(item) >= 30 : # 훈련에 사용할 데이터는 이상치 제거하고
-                    self.train_items[uid] = list(set(item) - set(u_valid_items))
+                # if len(item) <= 1000 and len(item) >= 30 : # 훈련에 사용할 데이터는 이상치 제거하고
+                self.train_items[uid] = list(set(item) - set(u_valid_items))
 
 
             self.train_data = pd.concat({k: pd.Series(v) for k, v in self.train_items.items()}).reset_index(0)
