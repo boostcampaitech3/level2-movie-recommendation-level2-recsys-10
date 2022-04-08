@@ -29,12 +29,12 @@ class BaseDataset(Dataset):
         
         # user, item indexing
         # item2idx = pd.Series(data=np.arange(len(item_ids))+1, index=item_ids) # item re-indexing (1~num_item) ; 아이템을 1부터 설정하는이유? 0을 아무것도 아닌 것으로 blank 하기 위해서
-        item2idx = pd.Series(data=np.arange(len(item_ids)), index=item_ids) # item re-indexing (0~num_item-1) ; 아이템을 1부터 설정하는이유? 0을 아무것도 아닌 것으로 blank 하기 위해서
-        user2idx = pd.Series(data=np.arange(len(user_ids)), index=user_ids) # user re-indexing (0~num_user-1)
+        self.item2idx = pd.Series(data=np.arange(len(item_ids)), index=item_ids) # item re-indexing (0~num_item-1) ; 아이템을 1부터 설정하는이유? 0을 아무것도 아닌 것으로 blank 하기 위해서
+        self.user2idx = pd.Series(data=np.arange(len(user_ids)), index=user_ids) # user re-indexing (0~num_user-1)
 
         # dataframe indexing
-        df = pd.merge(df, pd.DataFrame({'item': item_ids, 'item_idx': item2idx[item_ids].values}), on='item', how='inner')
-        df = pd.merge(df, pd.DataFrame({'user': user_ids, 'user_idx': user2idx[user_ids].values}), on='user', how='inner')
+        df = pd.merge(df, pd.DataFrame({'item': item_ids, 'item_idx': self.item2idx[item_ids].values}), on='item', how='inner')
+        df = pd.merge(df, pd.DataFrame({'user': user_ids, 'user_idx': self.user2idx[user_ids].values}), on='user', how='inner')
         df.sort_values(['user_idx', 'time'], inplace=True)
         del df['item'], df['user']
 
