@@ -17,7 +17,7 @@ from implicit.nearest_neighbours import (
     bm25_weight,
 )
 
-from modules import Encoder, LayerNorm
+from modules import Encoder, LayerNorm, activation_layer
 from utils import mf_sgd, get_predicted_full_matrix, get_rmse, item_encoding, als, get_ALS_loss
 
 
@@ -539,3 +539,60 @@ class Implicit_model(object):
                 pred_list = np.append(pred_list, [pred_items], axis=0)
 
         return pred_list
+
+class AutoRec(nn.Module):
+    """
+    AutoRec
+    
+    Args:
+        - input_dim: (int) input feature의 Dimension
+        - emb_dim: (int) Embedding의 Dimension
+        - hidden_activation: (str) hidden layer의 activation function.
+        - out_activation: (str) output layer의 activation function.
+    Shape:
+        - Input: (torch.Tensor) input features,. Shape: (batch size, input_dim)
+        - Output: (torch.Tensor) reconstructed features. Shape: (batch size, input_dim)
+    """
+    def __init__(self, args):
+        super(AutoRec, self).__init__()
+        
+        # initialize Class attributes
+        self.args = args
+        self.input_dim = self.args.input_dim
+        self.emb_dim = self.args.hidden_size
+        self.hidden_activation = self.args.hidden_activation
+        self.out_activation = self.args.out_activation
+        # self.dropout_rate = self.args.dropout_rate
+        
+        # define layers
+        self.encoder = nn.Sequential(
+            nn.Linear(self.input_dim, self.emb_dim),
+            activation_layer(self.hidden_activation),
+            # nn.Linear(self.emb_dim, self.emb_dim // 2),
+        )
+        self.decoder = nn.Sequential(
+            # nn.Linear(self.emb_dim // 2, self.emb_dim),
+            # activation_layer(self.out_activation),
+            nn.Linear(self.emb_dim, self.input_dim),
+        )
+        
+        self.init_weights()
+
+    # initialize weights
+    def init_weights(self):
+        for layer in self.encoder:
+            if isinstance(layer, nn.Linear):
+                layer.weight.data.normal_(0.0, self.args.initializer_range)
+                layer.bias.data.zero_()
+        
+        for layer in self.decoder:
+            if isinstance(layer, nn.Linear):
+                layer.weight.data.normal_(0.0, self.args.initializer_range)
+                layer.bias.data.zero_()
+
+    
+    def forward(self, input_feature):
+        h = self.encoder(input_feature)
+        output = self.decoder(h)
+        
+        return output

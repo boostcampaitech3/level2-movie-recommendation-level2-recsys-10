@@ -1,10 +1,12 @@
 import random
 import numpy as np
+import pandas as pd
 
 import torch
+from tqdm import tqdm
 from torch.utils.data import Dataset
 
-from utils import neg_sample
+from utils import neg_sample, item_encoding
 
 
 class PretrainDataset(Dataset):
@@ -308,4 +310,26 @@ class BERT4RecDataset(Dataset):
 
         return cur_tensors
 
- 
+class AutoRecDataset(Dataset):
+    def __init__(self, inter_mat, answers):
+        self.inter_mat = inter_mat
+        self.answers = answers
+
+        # valid data의 최소 길이
+        # self.answers_minlen = min([len(answer) for answer in self.answers.values()])
+
+    def __len__(self):
+        return len(self.inter_mat)
+
+    def __getitem__(self, index):
+        user_id = index
+        inter_mat = self.inter_mat[user_id]
+        answers = self.answers[user_id][-10:]
+       
+        cur_tensors = (
+            torch.tensor(user_id, dtype=torch.long),
+            torch.tensor(inter_mat, dtype=torch.float),
+            torch.tensor(answers, dtype=torch.long),
+        )
+
+        return cur_tensors

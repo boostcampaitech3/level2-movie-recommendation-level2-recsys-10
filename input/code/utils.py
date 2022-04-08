@@ -165,10 +165,11 @@ def generate_submission_file(data_file, preds, model_name):
     users = rating_df["user"].unique()
     item_ids = rating_df['item'].unique()
     
-    if model_name in ['MF', 'ALS', 'BPR', 'LMF', 'TFIDF', 'COSINE', 'BM25'] :
-        idx2item = pd.Series(data=item_ids, index=np.arange(len(item_ids)))
-    else:  
+    if model_name in ['SASRec', 'BERT4Rec']:  
         idx2item = pd.Series(data=item_ids, index=np.arange(len(item_ids))+1)  # item idx -> item id
+    else:
+        idx2item = pd.Series(data=item_ids, index=np.arange(len(item_ids)))
+    
 
     result = []
 
@@ -215,10 +216,11 @@ def item_encoding(df, model_name):
     num_item, num_user = len(item_ids), len(user_ids)
 
     # user, item indexing
-    if model_name in ['MF', 'ALS', 'BPR', 'LMF', 'TFIDF', 'COSINE', 'BM25']: 
-        item2idx = pd.Series(data=np.arange(len(item_ids)), index=item_ids) # item re-indexing (0~num_item-1)
-    else:
+    if model_name in ['SASRec', 'BERT4Rec']:
         item2idx = pd.Series(data=np.arange(len(item_ids))+1, index=item_ids) # item re-indexing (1~num_item), num_item+1: mask idx
+    else:
+        item2idx = pd.Series(data=np.arange(len(item_ids)), index=item_ids) # item re-indexing (0~num_item-1)
+    
     user2idx = pd.Series(data=np.arange(len(user_ids)), index=user_ids) # user re-indexing (0~num_user-1)
 
     # dataframe indexing
@@ -228,6 +230,50 @@ def item_encoding(df, model_name):
     del rating_df['item'], rating_df['user']
 
     return rating_df
+
+def train_valid_split(data_file, model_name):
+    df = pd.read_csv(data_file)
+    df = item_encoding(df, model_name)
+
+    num_users = df['user_idx'].nunique()
+    num_items = df['item_idx'].nunique()
+
+    items = df.groupby("user_idx")["item_idx"].apply(list)
+    # {"user_id" : [items]}
+    train_set, valid_set, item_set = {} , {}, {}
+    print("train_valid set split by user_idx")
+
+    for uid, item in enumerate(tqdm(items)):
+
+        # 유저가 소비한 item의 12.5% 또는 최대 10 으로 valid_set 아이템 구성
+        num_u_valid_set = 10
+        # num_u_valid_set = min(int(len(item)*0.125), 10)
+        u_valid_set = np.random.choice(item, size=num_u_valid_set, replace=False)
+        
+        train_set[uid] = list(set(item) - set(u_valid_set))
+        valid_set[uid] = u_valid_set.tolist()
+        item_set[uid] = list(set(item))
+
+    return train_set, valid_set, item_set
+
+def make_inter_mat(data_file, model_name, *datasets):
+    df = pd.read_csv(data_file)
+    df = item_encoding(df, model_name)
+
+    num_users = df['user_idx'].nunique()
+    num_items = df['item_idx'].nunique()
+
+    mat_list = []
+    dataset_list = datasets
+
+    for dataset in dataset_list: 
+        inter_mat = np.zeros((num_users, num_items))
+        for uid, items in tqdm(dataset.items()):
+            for item in items:
+                inter_mat[uid][item] = 1
+        mat_list.append(inter_mat)
+
+    return mat_list
 
 def get_user_seqs(data_file, model_name):
     df = pd.read_csv(data_file)
@@ -571,4 +617,4 @@ def get_ALS_loss(
         loss += regularization_term
 
     return loss
-    
+

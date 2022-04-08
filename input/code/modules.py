@@ -1,5 +1,6 @@
 import copy
 import math
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -189,3 +190,35 @@ class Encoder(nn.Module):
         if not output_all_encoded_layers:
             all_encoder_layers.append(hidden_states)
         return all_encoder_layers
+
+def activation_layer(activation_name='relu'):
+    """
+    Construct activation layers
+    
+    Args:
+        activation_name: str, name of activation function
+        emb_dim: int, used for Dice activation
+    Return:
+        activation: activation layer
+    """
+    if activation_name is None:
+        activation = None
+    elif isinstance(activation_name, str):
+        if activation_name.lower() == 'sigmoid':
+            activation = nn.Sigmoid()
+        elif activation_name.lower() == 'tanh':
+            activation = nn.Tanh()
+        elif activation_name.lower() == 'relu':
+            activation = nn.ReLU()
+        elif activation_name.lower() == 'leakyrelu':
+            activation = nn.LeakyReLU()
+        elif activation_name.lower() == 'selu':
+            activation = nn.SELU()
+        elif activation_name.lower() == 'none':
+            activation = None
+    elif issubclass(activation_name, nn.Module):
+        activation = activation_name()
+    else:
+        raise NotImplementedError("activation function {} is not implemented".format(activation_name))
+
+    return activation
