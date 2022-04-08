@@ -71,7 +71,7 @@ def main():
     parser.add_argument('--wd', type=float, default=0.00,
                         help='weight decay coefficient')
     parser.add_argument("--model_name", default="MultiVAE", type=str)
-    parser.add_argument('--batch_size', type=int, default=500,
+    parser.add_argument('--batch_size', type=int, default=250,
                         help='batch size')
     parser.add_argument('--epochs', type=int, default=50,
                         help='upper epoch limit')
@@ -106,8 +106,8 @@ def main():
     wandb.run.name = args.wandb_name
 
     if args.model_name == 'MultiVAE':
-        train_batch_size = 500
-        valid_batch_size = 1000
+        train_batch_size = 250
+        valid_batch_size = 500
 
         # 만들어준 데이터 셋을 바탕으로 Dataset과 Dataloader를 정의
         train_dataset = MultiVAEDataset()
@@ -156,7 +156,7 @@ def main():
                     elapsed = time() - start_time
                     print('| epoch {:3d} | {:4d}/{:4d} batches | ms/batch {:4.2f} | '
                             'loss {:4.2f}'.format(
-                                epoch, batch_idx, len(range(0, 6807, batch_size)),
+                                epoch, batch_idx, len(range(0, 6807, args.batch_size)),
                                 elapsed * 1000 / log_interval,
                                 train_loss / log_interval))
 
