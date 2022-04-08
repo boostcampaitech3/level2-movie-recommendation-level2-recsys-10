@@ -1,7 +1,10 @@
 import random
 import os
+import time
+from typing import Sequence
 import numpy as np
 import pandas as pd
+from sklearn import datasets
 
 import torch
 from torch.utils.data import Dataset
@@ -225,18 +228,15 @@ class SASRecDataset(Dataset):
     def __len__(self):
         return len(self.user_seq)
 
-
-
-
 class WDDataset(Dataset):
-    def __init__(self, path='../data/', mode='train'):
+    def __init__(self, args, data_type='train'):
 
-        #self.args = args
-        self.mode = mode
+        self.args = args
+        #self.path = path
+        self.data_type = data_type
         # data Path
-        #self.data_path = os.path.join(path, 'train/train_ratings.csv')
-        df = pd.read_csv("/opt/ml/worksapce/level2-movie-recommendation-level2-recsys-10/input/data/train/train_ratings.csv")        
-        # df = pd.read_csv(self.data_path)
+        df = pd.read_csv(self.args.data_file)        
+        #df = pd.read_csv(os.path.join('../data/', 'train/train_ratings.csv'))
         
         # for submission
         #self.rating_df = df.copy()
@@ -268,14 +268,19 @@ class WDDataset(Dataset):
         self.exist_users = list(df['user_idx'].unique())
 
         #genre_data to mulit-hot encoding
-        genre_df = pd.read_csv("/opt/ml/worksapce/level2-movie-recommendation-level2-recsys-10/input/data/train/genres.tsv", sep='\t')
-        #genre_df = pd.read_csv(os.path.join(path, 'train/genres.tsv'), sep='\t')
+        #genre_df = pd.read_csv("/opt/ml/worksapce/level2-movie-recommendation-level2-recsys-10/input/data/train/genres.tsv", sep='\t')
+        genre_df = pd.read_csv(os.path.join('../data/', 'train/genres.tsv'), sep='\t')
 
         # genre_mulit = DataFrame(genres, item_idx)
         self.genre_mulit = self.genre_items_mulithot(genre_df)
 
         # train, valid split
-        self.datasets = self.train_valid_split(df)
+        #self.trainsets, self.trainsets_unique, self.validsets, self.valid_unique = self.train_valid_split(df)
+
+        if self.data_type == "Train":
+            self.datasets ,self.datasets_unique , _, _ = self.train_valid_split(df)
+        elif self.data_type == "valid":
+            _, _, self.datasets ,self.datasets_unique  = self.train_valid_split(df)
 
 
     def genre_items_mulithot(self, genre_data):
@@ -301,69 +306,96 @@ class WDDataset(Dataset):
         items = df.groupby("user_idx")["item_idx"].apply(list)
         # {"user_id" : [items]}
         train_set, valid_set = {} , {}
-        print("train_valid set split by user_idx")
-
+        train_unique, valid_unique = [] , []
+        print("----train_valid set split by user_idx----")
         for uid, item in tqdm(enumerate(items)):
-            
             # 유저가 소비한 item의 12.5% 또는 최대 10 으로 valid_set 아이템 구성
             num_u_valid_set = min(int(len(item)*0.125), 10)
             u_valid_set = np.random.choice(item, size=num_u_valid_set, replace=False)
             
             train_set[uid] = list(set(item) - set(u_valid_set))
+            train_unique.extend(train_set[uid])
             valid_set[uid] = u_valid_set
+            valid_unique.extend(valid_set[uid])
 
-        # mode에 따라 반환하는 데이터가 다름
-        if self.mode == "train":
-            return train_set
-        elif self.mode == "valid":
-            return valid_set
+        
+        return train_set , set(train_unique), valid_set , set(valid_unique)
         
 
-    def make_pos_next_items(self, user):
+    # def make_pos_next_items(self, user):
         # 해당 user의 리스트를 positive, negative 분류
-        mask_prob = self.args.mask_prob
-        seq = self.datasets[user]
-        datasets = set(self.datasets.values())
-        
-        tokens = []
+        #mask_prob = self.args.mask_prob
+        # seq = self.datasets[user]
+        # datasets = set(sum(self.datasets.values(),[]))
+        # tokens = []
+        # target = []
 
-        for s in seq: # user의 모든 items sets을 가지고 구성     
-            negative_items = np.random.choice(list(datasets - set(seq)), self.args.num_negative, replace=False)
-            token_in = [user, s] # [user, item]
-            item_genres = self.genre_mulit[self.genre_mulit["item_idx"]==s].iloc[:,1:].values.tolist()
-            seq.remove(s)
-            if len(seq) != 1: # seq이 마지막이면 pass
-                for q in seq: # s와 나머지 items간의 positive 관계 만들기
-                    token_in.extend([q, 1])
-                    # item genres, next_genres
-                    token_in.extend(*item_genres) 
-                    token_in.extend(*(self.genre_mulit[self.genre_mulit["item_idx"]==q].iloc[:,1:].values.tolost()))
-                    
-                    tokens.append(token_in)
-                    token_in = [user, s]
+        # for s in seq: # user의 모든 items sets을 가지고 구성     
+        #     negative_items = np.random.choice(list(datasets - set(seq)), self.args.num_negative, replace=False)
+        #     token_in = [user, s] # [user, item]
+        #     item_genres = self.genre_mulit[self.genre_mulit["item_idx"]==s].iloc[:,1:].values.tolist()
+        #     seq.remove(s)
+        #     if len(seq) != 1: # seq이 마지막이면 pass
+        #         for q in seq: # s와 나머지 items간의 positive 관계 만들기
+        #             token_in.extend([q])
+        #             # item genres, next_genres
+        #             token_in.extend(*item_genres) 
+        #             token_in.extend(*(self.genre_mulit[self.genre_mulit["item_idx"]==q].iloc[:,1:].values.tolost()))
+        #             tokens.append(token_in)
 
-            for negative in negative_items: # negative 만큼 뽑기
-                token_in.extend([negative, 0]) 
-                token_in.extend(*item_genres)
-                token_in.extend(*(self.genre_mulit[self.genre_mulit["item_idx"]==negative].iloc[:,1:].values.tolost()))
+        #             target.append([1])
+        #             token_in = [user, s]
+
+        #     for negative in negative_items: # negative 만큼 뽑기
+        #         token_in.extend([negative]) 
+        #         token_in.extend(*item_genres)
+        #         token_in.extend(*(self.genre_mulit[self.genre_mulit["item_idx"]==negative].iloc[:,1:].values.tolost()))
                 
-                tokens.append(token_in)
-                token_in = [user, s]
+        #         target.append([0])
+        #         tokens.append(token_in)
+        #         token_in = [user, s]
 
-        # [user, item, next, label, item_genres, next_genres] 해당 유저의 경우의 수를 return
-        return tokens 
+        # [[user, item, next, item_genres, next_genres]] , [[target]]
+        # return tokens , target
 
+    def random_pos_next_items(self, user):
+    # 해당 user의 리스트를 확률 값으로 positive, negative 생성하여 내보냄
+        mask_prob = 0.7
+        item = np.random.choice(self.datasets[user], 1, replace=False)
+        datasets_unique = self.datasets_unique
+        target = []
+        
+        #negative_items = np.random.choice(list(datasets - set(item)), self.args.num_negative, replace=False)
+        token = [user, item[0]] # [user, item]
+        item_genres = self.genre_mulit[self.genre_mulit["item_idx"]==item[0]].iloc[:,0:-1].values.tolist()
+        token.extend(*item_genres)
+        prob = np.random.random()
+        if prob < mask_prob:
+            # positive case
+            positive_next = np.random.choice(list(datasets_unique - set(item)), 1, replace=False)
+            token.append(positive_next[0])
+            token.extend(self.genre_mulit[self.genre_mulit["item_idx"]==positive_next[0]].iloc[:,0:-1].values[0])
+            target.append(1)
+
+        else:
+            # negative case
+            negative_next = np.random.choice(list(datasets_unique - set(item)), 1, replace=False)
+            token.append(negative_next[0])
+            token.extend(self.genre_mulit[self.genre_mulit["item_idx"]==negative_next[0]].iloc[:,0:-1].values[0])
+            target.append(0)
+
+
+        # [user, item, item_genres, next, next_genres] 1 + 1 + 18 + 1 + 18 = 39 , [target]
+        return token , target
 
     def __getitem__(self, idx): # idx = batch_size 
         # train, valid set split
-        
         user = self.exist_users[idx]
-        item_next_data = self.make_pos_next_items(user)
-
-        return item_next_data
+        X , y = self.random_pos_next_items(user)
+        return torch.tensor(X), torch.tensor(y)
+        #return X, y
 
     def __len__(self):
-
+        # user의 총 숫자
         return self.n_users
 
-data = WDDataset()
