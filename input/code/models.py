@@ -562,18 +562,36 @@ class AutoRec(nn.Module):
         self.emb_dim = self.args.hidden_size
         self.hidden_activation = self.args.hidden_activation
         self.out_activation = self.args.out_activation
-        # self.dropout_rate = self.args.dropout_rate
+        self.num_layers = self.args.num_layers
+        self.dropout_rate = self.args.dropout_rate
         
         # define layers
+        encoder_modules = list()
+        encoder_layers = [self.input_dim] + [self.emb_dim // (2 ** i) for i in range(self.num_layers)]
+        for i in range(self.num_layers):
+            input_size = encoder_layers[i] 
+            output_size = encoder_layers[i + 1] 
+            encoder_modules.append(nn.Linear(input_size, output_size))
+            activation_function = activation_layer(self.hidden_activation)
+            if activation_function is not None:
+                encoder_modules.append(activation_function)
+        encoder_modules.append(nn.Dropout(self.dropout_rate))
+        
+        decoder_modules = list()
+        decoder_layers = encoder_layers[::-1]
+        for i in range(self.num_layers):
+            input_size = decoder_layers[i] 
+            output_size = decoder_layers[i + 1] 
+            decoder_modules.append(nn.Linear(input_size, output_size))
+            activation_function = activation_layer(self.out_activation)
+            if activation_function is not None and (i < self.num_layers - 1):
+                decoder_modules.append(activation_function)
+
         self.encoder = nn.Sequential(
-            nn.Linear(self.input_dim, self.emb_dim),
-            activation_layer(self.hidden_activation),
-            # nn.Linear(self.emb_dim, self.emb_dim // 2),
+            *encoder_modules
         )
         self.decoder = nn.Sequential(
-            # nn.Linear(self.emb_dim // 2, self.emb_dim),
-            # activation_layer(self.out_activation),
-            nn.Linear(self.emb_dim, self.input_dim),
+            *decoder_modules
         )
         
         self.init_weights()
@@ -582,12 +600,12 @@ class AutoRec(nn.Module):
     def init_weights(self):
         for layer in self.encoder:
             if isinstance(layer, nn.Linear):
-                layer.weight.data.normal_(0.0, self.args.initializer_range)
+                torch.nn.init.xavier_normal_(layer.weight.data)
                 layer.bias.data.zero_()
         
         for layer in self.decoder:
             if isinstance(layer, nn.Linear):
-                layer.weight.data.normal_(0.0, self.args.initializer_range)
+                torch.nn.init.xavier_normal_(layer.weight.data)
                 layer.bias.data.zero_()
 
     

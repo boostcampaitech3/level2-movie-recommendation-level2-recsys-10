@@ -311,9 +311,9 @@ class BERT4RecDataset(Dataset):
         return cur_tensors
 
 class AutoRecDataset(Dataset):
-    def __init__(self, inter_mat, answers):
+    def __init__(self, inter_mat, answers_mat):
         self.inter_mat = inter_mat
-        self.answers = answers
+        self.answers = answers_mat.argsort(axis = 1)
 
         # valid data의 최소 길이
         # self.answers_minlen = min([len(answer) for answer in self.answers.values()])

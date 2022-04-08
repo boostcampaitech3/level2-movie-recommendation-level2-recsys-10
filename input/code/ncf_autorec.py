@@ -38,13 +38,15 @@ def main():
         "--hidden_activation", type=str, default='sigmoid', help="Autorec encoder activation function"
     )
     parser.add_argument(
-        "--out_activation", type=str, default='none', help="Autorec decoder activation function"
+        "--out_activation", type=str, default='sigmoid', help="Autorec decoder activation function"
     )
     parser.add_argument(
-        "--num_hidden_layers", type=int, default=2, help="number of layers"
+        "--num_layers", type=int, default=2, help="number of layers"
     )
     parser.add_argument("--initializer_range", type=float, default=0.02)
-    
+    parser.add_argument(
+        "--dropout_rate", type=float, default=0.05, help="dropout rate"
+    )
 
     # train args
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate of adam")
@@ -69,15 +71,17 @@ def main():
 
 
     parser.add_argument("--wandb_name", type=str)
+    parser.add_argument("--wandb", action="store_true")
 
     # 1. wandb init
     #wandb.init(project="movierec_train_styoo", entity="styoo", name="SASRec_WithPretrain")
     args = parser.parse_args()
-    wandb.init(project="movierec_train", entity="egsbj")
-    wandb.run.name = args.wandb_name
+    if args.wandb:
+        wandb.init(project="movierec_train", entity="egsbj")
+        wandb.run.name = args.wandb_name
 
-    # 2. wandb config
-    wandb.config.update(args)
+        # 2. wandb config
+        wandb.config.update(args)
     print(str(args))
 
     set_seed(args.seed)
@@ -103,26 +107,26 @@ def main():
     args.train_matrix = train_mat
 
     if args.model_name == 'AutoRec':
-        train_dataset = AutoRecDataset(train_mat, valid_set)
-        eval_dataset = AutoRecDataset(train_mat, valid_set)
+        train_dataset = AutoRecDataset(train_mat, valid_mat)
+        eval_dataset = AutoRecDataset(train_mat, valid_mat)
         # test_dataset = AutoRecDataset(item_mat, None)
-        submission_dataset = AutoRecDataset(item_mat, valid_set)
+        submission_dataset = AutoRecDataset(item_mat, valid_mat)
 
     train_dataloader = DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle = True, pin_memory = True
     )
 
     eval_dataloader = DataLoader(
-        eval_dataset, batch_size=args.batch_size, shuffle = True, pin_memory = True
+        eval_dataset, batch_size=args.batch_size, shuffle = False, pin_memory = True
     )
 
     # test_sampler = RandomSampler(test_dataset)
     # test_dataloader = DataLoader(
-    #     test_dataset, sampler=test_sampler, batch_size=args.batch_size, shuffle = True
+    #     test_dataset, sampler=test_sampler, batch_size=args.batch_size, shuffle = False
     # )
 
     submission_dataloader = DataLoader(
-        submission_dataset, batch_size=args.batch_size, shuffle = True, pin_memory = True
+        submission_dataset, batch_size=args.batch_size, shuffle = False, pin_memory = True
     )
 
     if args.model_name == 'AutoRec':
@@ -134,6 +138,7 @@ def main():
             model, train_dataloader, eval_dataloader, None, submission_dataloader, args
         )
     
+    print(model)
     
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
 
@@ -143,10 +148,11 @@ def main():
         scores, _ = trainer.valid(epoch)
         
         # 3. wandb log
-        wandb.log({"recall@5" : scores[0],
-                   "ndcg@5" : scores[1],
-                   "recall@10" : scores[2],
-                   "ndcg@10" : scores[3]})
+        if args.wandb:
+            wandb.log({"recall@5" : scores[0],
+                    "ndcg@5" : scores[1],
+                    "recall@10" : scores[2],
+                    "ndcg@10" : scores[3]})
 
         early_stopping(np.array([scores[2]]), trainer.model)
         if early_stopping.early_stop:

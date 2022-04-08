@@ -246,8 +246,8 @@ def train_valid_split(data_file, model_name):
     for uid, item in enumerate(tqdm(items)):
 
         # 유저가 소비한 item의 12.5% 또는 최대 10 으로 valid_set 아이템 구성
-        num_u_valid_set = 10
-        # num_u_valid_set = min(int(len(item)*0.125), 10)
+        # num_u_valid_set = 10
+        num_u_valid_set = min(int(len(item)*0.125), 10)
         u_valid_set = np.random.choice(item, size=num_u_valid_set, replace=False)
         
         train_set[uid] = list(set(item) - set(u_valid_set))

@@ -428,7 +428,7 @@ class AutoRecTrainer(Trainer):
         )
 
         self.loss_fn = nn.MSELoss().to(self.device)
-        # self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optim, 'min', factor = 0.1, eps = 1e-09, patience = 5)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optim, 'min', factor = 0.1, eps = 1e-09, patience = 5)
 
     def iteration(self, epoch, dataloader, mode="train"):
 
@@ -459,12 +459,15 @@ class AutoRecTrainer(Trainer):
 
                 rec_avg_loss += loss.item()
                 rec_cur_loss = loss.item()
+                
 
-                # self.scheduler.step(rec_avg_loss)
+            rec_avg_loss /= len(rec_data_iter)
+
+            self.scheduler.step(rec_avg_loss)
 
             post_fix = {
                 "epoch": epoch,
-                "rec_avg_loss": "{:.4f}".format(rec_avg_loss / len(rec_data_iter)),
+                "rec_avg_loss": "{:.4f}".format(rec_avg_loss),
                 "rec_cur_loss": "{:.4f}".format(rec_cur_loss),
             }
 
@@ -480,7 +483,7 @@ class AutoRecTrainer(Trainer):
                 for i, batch in rec_data_iter:
                     batch = tuple(t.to(self.device) for t in batch)
                     user_ids, inter_mat, answers = batch
-                     
+
                     rating_pred = self.model(inter_mat)
 
                     rating_pred = rating_pred.cpu().data.numpy().copy()
