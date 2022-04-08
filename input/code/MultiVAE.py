@@ -1,78 +1,22 @@
 import os
 import argparse
-import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import pandas as pd
 from scipy import sparse
+from time import time
 
-from datasets import MultiVAEDataset
+from datasets import MultiVAEDataset, MultiVAEValidDataset
+from torch.utils.data import DataLoader
 from models import MultiVAE
-from utils import NDCG_binary_at_k_batch, Recall_at_k_batch, loss_function_vae
-from preprocessing import MultiVAE_preprocess, numerize
+from utils import Recall_at_k_batch
+from preprocessing import numerize
 
 import wandb
 
-def naive_sparse2tensor(data):
-    return torch.FloatTensor(data.toarray())
-
-def evaluate(args, model, criterion, data_tr, data_te):
-    # Turn on evaluation mode
-    model.eval()
-    total_loss = 0.0
-    e_idxlist = list(range(data_tr.shape[0]))
-    e_N = data_tr.shape[0]
-    n100_list = []
-    r20_list = []
-    r50_list = []
-    r10_list = []
-    
-    with torch.no_grad():
-        for start_idx in range(0, e_N, args.batch_size):
-            end_idx = min(start_idx + args.batch_size, N)
-            data = data_tr[e_idxlist[start_idx:end_idx]]
-            heldout_data = data_te[e_idxlist[start_idx:end_idx]]
-
-            data_tensor = naive_sparse2tensor(data).to(device)
-              
-            if args.total_anneal_steps > 0:
-                anneal = min(args.anneal_cap, 
-                            1. * update_count / args.total_anneal_steps)
-            else:
-                anneal = args.anneal_cap
-
-            recon_batch, mu, logvar = model(data_tensor)
-
-            loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
-
-            total_loss += loss.item()
-
-            # Exclude examples from training set
-            recon_batch = recon_batch.cpu().numpy()
-            recon_batch[data.nonzero()] = -np.inf
-
-            n100 = NDCG_binary_at_k_batch(recon_batch, heldout_data, 100)
-            r20 = Recall_at_k_batch(recon_batch, heldout_data, 20)
-            r50 = Recall_at_k_batch(recon_batch, heldout_data, 50)
-            r10 = Recall_at_k_batch(recon_batch, heldout_data, 10)
-
-            n100_list.append(n100)
-            r20_list.append(r20)
-            r50_list.append(r50)
-            r10_list.append(r10)
- 
-    total_loss /= len(range(0, e_N, args.batch_size))
-    n100_list = np.concatenate(n100_list)
-    r20_list = np.concatenate(r20_list)
-    r50_list = np.concatenate(r50_list)
-    r10_list = np.concatenate(r10_list)
-
-    return total_loss, np.mean(n100_list), np.mean(r20_list), np.mean(r50_list), np.mean(r10_list)
-
 def submission_multi_vae(args, model):
-    print("-----submission-----")
     DATA_DIR = args.data
     rating_df = pd.read_csv(os.path.join(DATA_DIR, 'train_ratings.csv'), header=0)
 
@@ -95,7 +39,7 @@ def submission_multi_vae(args, model):
                             (rows, cols)), dtype='float64',
                             shape=(n_users, n_items))
 
-    test_data_tensor = naive_sparse2tensor(data).to(device)
+    test_data_tensor = torch.FloatTensor(data.toarray()).to(device)
 
     recon_batch, mu, logvar = model(test_data_tensor)
 
@@ -107,11 +51,11 @@ def submission_multi_vae(args, model):
     for user in range(len(recon_batch)):
         rating_pred = recon_batch[user]
         rating_pred[test_data_tensor[user].reshape(-1) > 0] = 0
-        
+
         idx = np.argsort(rating_pred.detach().cpu().numpy())[-10:][::-1]
         for i in idx:
             result.append((id2profile[user], id2show[i]))
-        
+
     pd.DataFrame(result, columns=["user", "item"]).to_csv(
         "output/" + args.model_name + ".csv", index=False
     )
@@ -162,102 +106,117 @@ def main():
     wandb.run.name = args.wandb_name
 
     if args.model_name == 'MultiVAE':
-        MultiVAE_preprocess(args)
+        train_batch_size = 500
+        valid_batch_size = 1000
 
-        loader = MultiVAEDataset(args.data)
+        # 만들어준 데이터 셋을 바탕으로 Dataset과 Dataloader를 정의
+        train_dataset = MultiVAEDataset()
+        valid_dataset = MultiVAEValidDataset(train_dataset = train_dataset)
 
-        n_items = loader.load_n_items()
-        train_data = loader.load_data('train')
-        vad_data_tr, vad_data_te = loader.load_data('validation')
-        test_data_tr, test_data_te = loader.load_data('test')
+        train_loader = DataLoader(train_dataset, batch_size=train_batch_size, drop_last=True, pin_memory=True, shuffle=True)
+        valid_loader = DataLoader(valid_dataset, batch_size=valid_batch_size, drop_last=False, pin_memory=True, shuffle=False)
 
-        global N
-        N = train_data.shape[0]
-        idxlist = list(range(N))
+        # 모델 정의
+        n_items = train_dataset.n_items
+        model = MultiVAE(args, p_dims=[200, 600, n_items]).to(device)
+        optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=0)
 
-        p_dims = [200, 600, n_items]
-        model = MultiVAE(args=args, p_dims=p_dims).to(device)
-        wandb.config.update(args)
-
-        optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=args.wd)
-
-        criterion = loss_function_vae
-
-        # train
-        best_r10 = -np.inf
-        global update_count
         update_count = 0
+        best_r10 = -np.inf
 
         for epoch in range(1, args.epochs + 1):
-            epoch_start_time = time.time()
-
+            epoch_start_time = time()
+            ###### train ######
             model.train()
             train_loss = 0.0
-            start_time = time.time()
+            start_time = time()
 
-            N = train_data.shape[0]
-            idxlist = list(range(N))
-
-            np.random.shuffle(idxlist)
-            
-            for batch_idx, start_idx in enumerate(range(0, N, args.batch_size)):
-                end_idx = min(start_idx + args.batch_size, N)
-                data = train_data[idxlist[start_idx:end_idx]]
-                data = naive_sparse2tensor(data).to(device)
+            for batch_idx, batch_data in enumerate(train_loader):
+                input_data = batch_data.to(device)
                 optimizer.zero_grad()
 
                 if args.total_anneal_steps > 0:
-                    anneal = min(args.anneal_cap, 1. * update_count / args.total_anneal_steps)
+                    anneal = min(args.anneal_cap, 
+                                    1. * update_count / args.total_anneal_steps)
                 else:
                     anneal = args.anneal_cap
 
-                optimizer.zero_grad()
-                recon_batch, mu, logvar = model(data)
+                recon_batch, mu, logvar = model(input_data)
                 
-                loss = criterion(recon_batch, data, mu, logvar, anneal)
-
+                loss = model.loss_function(recon_batch, input_data, mu, logvar, anneal)
+                
                 loss.backward()
                 train_loss += loss.item()
                 optimizer.step()
 
-                update_count += 1
+                update_count += 1        
 
-                if batch_idx % args.log_interval == 0 and batch_idx > 0:
-                    elapsed = time.time() - start_time
+                log_interval = 100
+                if batch_idx % log_interval == 0 and batch_idx > 0:
+                    elapsed = time() - start_time
                     print('| epoch {:3d} | {:4d}/{:4d} batches | ms/batch {:4.2f} | '
                             'loss {:4.2f}'.format(
-                                epoch, batch_idx, len(range(0, N, args.batch_size)),
-                                elapsed * 1000 / args.log_interval,
-                                train_loss / args.log_interval))
+                                epoch, batch_idx, len(range(0, 6807, batch_size)),
+                                elapsed * 1000 / log_interval,
+                                train_loss / log_interval))
 
-                    start_time = time.time()
+                    start_time = time()
                     train_loss = 0.0
 
-            val_loss, n100, r20, r50, r10 = evaluate(args, model, criterion, vad_data_tr, vad_data_te)
+            ###### eval ######
+            recall10_list = []
+            recall20_list = []
+            total_loss = 0.0
+            model.eval()
+            with torch.no_grad():
+                for batch_data in valid_loader:
+                    input_data, label_data = batch_data # label_data = validation set 추론에도 사용되지 않고 오로지 평가의 정답지로 사용된다. 
+                    input_data = input_data.to(device)
+                    label_data = label_data.to(device)
+                    label_data = label_data.cpu().numpy()
+                    
+                    if args.total_anneal_steps > 0:
+                        anneal = min(args.anneal_cap, 
+                                    1. * update_count / args.total_anneal_steps)
+                    else:
+                        anneal = args.anneal_cap
 
-            wandb.log({"valid loss" : val_loss,
-                "n100" : n100,
-                "r20" : r20, 
-                "r10" : r10,
-                "r50" : r50})
-            n_iter = epoch * len(range(0, N, args.batch_size))
+                    recon_batch, mu, logvar = model(input_data)
 
-            # Save the model if the n100 is the best we've seen so far.
-            if r10 > best_r10:
+                    loss = model.loss_function(recon_batch, input_data, mu, logvar, anneal)
+
+                    total_loss += loss.item()
+                    recon_batch = recon_batch.cpu().numpy()
+                    recon_batch[input_data.cpu().numpy().nonzero()] = -np.inf
+
+                    recall10 = Recall_at_k_batch(recon_batch, label_data, 10)
+                    recall20 = Recall_at_k_batch(recon_batch, label_data, 20)
+                    
+                    recall10_list.append(recall10)
+                    recall20_list.append(recall20)
+            
+            total_loss /= len(range(0, 6807, 1000))
+            r10_list = np.concatenate(recall10_list)
+            r20_list = np.concatenate(recall20_list)
+                    
+            print('-' * 89)
+            print('| end of epoch {:3d} | time: {:4.2f}s | valid loss {:4.2f} | '
+                    'r10 {:5.3f} | r20 {:5.3f}'.format(
+                        epoch, time() - epoch_start_time, total_loss, np.mean(r10_list), np.mean(r20_list)))
+            print('-' * 89)
+            
+            wandb.log({"valid loss" : total_loss,
+            "r20" : np.mean(r20_list), 
+            "r10" : np.mean(r10_list)})
+
+            if np.mean(r10_list) > best_r10:
                 with open(args.save, 'wb') as f:
                     torch.save(model, f)
-                best_r10 = r10
+                best_r10 = np.mean(r10_list)
 
-        # Load the best saved model.
-        with open(args.save, 'rb') as f:
-            model = torch.load(f)
-
-        # Run on test data.
-        test_loss, n100, r20, r50, r10 = evaluate(args, model, criterion, test_data_tr, test_data_te)
-        print('=' * 89)
-        print('| End of training | test loss {:4.2f} | n100 {:4.2f} | r20 {:4.2f} | r10 {:4.2f} |'
-                'r50 {:4.2f}'.format(test_loss, n100, r20, r10 ,r50))
-        print('=' * 89)
+    # inference
+    with open(args.save, 'rb') as f:
+        model = torch.load(f)
 
     submission_multi_vae(args, model)
 
