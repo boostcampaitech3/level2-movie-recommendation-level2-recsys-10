@@ -19,7 +19,7 @@ import argparse
 parser = argparse.ArgumentParser()
 
 # env parameter
-parser.add_argument('--seed', type=int, default='42', help=' ')
+parser.add_argument('--seed', type=int, default='42', help='')
 parser.add_argument('--dataset', type=str)
 
 # model parameter
@@ -31,32 +31,28 @@ parser.add_argument('--gamma', type=float, default=0.005)
 parser.add_argument('--dropout_rate', type=float, default=0.5)
 
 # train parameter (with valid)
-parser.add_argument("--epochs", type=int, default=3000, help="number of epochs")
-
+parser.add_argument("--epochs", type=int, default=50, help="number of epochs")
 parser.add_argument('--batch_size', type=int, default=500)
-parser.add_argument('--lr', type=float, default=1e-3)#5e-4
-# parser.add_argument('--n_epochs', type=int, default=50)
+parser.add_argument('--lr', type=float, default=5e-4)
 parser.add_argument('--n-enc_epochs', type=int, default=3)
 parser.add_argument('--n-dec_epochs', type=int, default=1)
-parser.add_argument('--not-alternating', type=bool, default=False) # default = False, True
+parser.add_argument('--not-alternating', type=bool, default=False)
 parser.add_argument("--eval_N", type=int, default=1, help=" ")
 parser.add_argument("--k", type=int, default=10, help=" ")
 
 # path
 parser.add_argument("--data_dir", type=str, default='../data/', help=" ")
-# parser.add_argument("--data_dir", type=str, default='/opt/ml/workspace/level2-movie-recommendation-level2-recsys-10/input/data', help=" ")
-
 parser.add_argument("--output_dir", type=str, default='./output', help=" ")
 
 # utilities
-parser.add_argument("--wandb_name", type=str, default='-', help=" ")
+parser.add_argument("--wandb_name", type=str, default='|', help=" ")
 
 args = parser.parse_args()
 
 ##### wandb init #####
-# wandb.init(project="movierec_train", entity="egsbj")
-# wandb.run.name = args.model + args.wandb_name
-# wandb.config.update(args)
+wandb.init(project="movierec_train", entity="egsbj")
+wandb.run.name = args.model + '|' + args.wandb_name
+wandb.config.update(args)
 
 # -- seed
 set_seed(args.seed)
@@ -66,7 +62,7 @@ use_cuda = torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
 
 # -- save dir
-save_dir_name = args.model
+save_dir_name = args.model + '|' + args.wandb_name
 save_dir_path = increment_path(os.path.join(args.output_dir, save_dir_name))
 check_path(save_dir_path)
 
@@ -103,7 +99,7 @@ print("Params on CUDA: " + str(next(model.parameters()).is_cuda))
 results = {"Epoch": [], "Loss": [], "Valid_Loss":[], "Recall": [], "Training Time": []} #, "NDCG": []
 
 # -- trainer module
-def trainer(model, opts, train_loader, n_epochs, beta=None, gamma=1):
+def trainer(model, opts, train_loader, n_epochs, beta=args.beta, gamma=args.gamma):
     temp_total_loss = 0.0
     model.train()
     for epoch in range(n_epochs):
@@ -130,7 +126,8 @@ for epoch in range(args.epochs):
     # -- train
     running_loss = 0.0
     print()
-    print("="*40, f"| [EPOCH: {epoch:3}/{args.epochs}] |", "="*40)
+    epoch_print = f"| [EPOCH: {epoch:3}/{args.epochs}] |"
+    print("="*40, epoch_print, "="*40)
     t1 = time()
 
     if args.not_alternating:
@@ -194,7 +191,7 @@ for epoch in range(args.epochs):
         results['Recall'].append(recall)
         # results['NDCG'].append(ndcg.item())
         results['Training Time'].append(training_time)
-        # wandb.log({'epoch': epoch, 'Loss': running_loss, 'recall@10':recall.item(), 'ndcg@10': ndcg.item()})
+        wandb.log({'epoch': epoch, 'Loss': running_loss, 'recall@10':recall})
         
         if best_score < recall : 
             best_score = recall
@@ -209,8 +206,8 @@ for epoch in range(args.epochs):
         results['Recall'].append(None)
         # results['NDCG'].append(None)
         results['Training Time'].append(training_time)
-        # wandb.log({'epoch': epoch, 'Loss': running_loss})
-    print("="*104)
+        wandb.log({'epoch': epoch, 'Loss': running_loss})
+    print("="*(80+len(epoch_print)))
     if should_stop == True: break
 
 # -- save
