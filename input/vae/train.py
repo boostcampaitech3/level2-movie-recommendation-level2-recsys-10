@@ -12,6 +12,7 @@ from importlib import import_module
 import os
 from torch.utils.data import DataLoader
 from dataset import BaseDataset, ValidDataset
+from  torch.optim.lr_scheduler import StepLR, MultiStepLR, ReduceLROnPlateau
 
 import wandb
 import argparse
@@ -29,13 +30,14 @@ parser.add_argument('--latent_dim', type=int, default=200)
 parser.add_argument('--beta', type=float, default=None)
 parser.add_argument('--gamma', type=float, default=0.005)
 parser.add_argument('--dropout_rate', type=float, default=0.5)
+parser.add_argument('--n-enc_epochs', type=int, default=3)
+parser.add_argument('--n-dec_epochs', type=int, default=1)
 
 # train parameter (with valid)
 parser.add_argument("--epochs", type=int, default=50, help="number of epochs")
 parser.add_argument('--batch_size', type=int, default=500)
 parser.add_argument('--lr', type=float, default=5e-4)
-parser.add_argument('--n-enc_epochs', type=int, default=3)
-parser.add_argument('--n-dec_epochs', type=int, default=1)
+parser.add_argument("--lr_decay_step", type=int, default=1000, help="default: 1000") 
 parser.add_argument('--not-alternating', type=bool, default=False)
 parser.add_argument("--eval_N", type=int, default=1, help=" ")
 parser.add_argument("--k", type=int, default=10, help=" ")
@@ -89,6 +91,12 @@ encoder_params = set(model.encoder.parameters())
 optimizer_encoder = torch.optim.Adam(encoder_params, lr=args.lr)
 optimizer_decoder = torch.optim.Adam(decoder_params, lr=args.lr)
 
+# -- Learning Rate Scheduler
+scheduler_encoder = StepLR(optimizer_encoder, step_size=args.lr_decay_step, gamma=0.5)
+scheduler_decoder = StepLR(optimizer_decoder, step_size=args.lr_decay_step, gamma=0.5)
+# scheduler_encoder = ReduceLROnPlateau(optimizer_encoder, mode='min')
+# scheduler_decoder = ReduceLROnPlateau(optimizer_decoder, mode='min')
+
 # -- others; training env preset
 cur_best_metric = 0
 cur_best_loss, stopping_step, should_stop = 1e3, 0, False
@@ -132,14 +140,20 @@ for epoch in range(args.epochs):
 
     if args.not_alternating:
         model.dropout_rate = 0.5
-        loss = trainer(model, opts=[optimizer_encoder, optimizer_decoder], train_loader=train_loader, n_epochs=1)
+        loss = trainer(
+            model, opts=[optimizer_encoder, optimizer_decoder], 
+            train_loader=train_loader, n_epochs=1)
         running_loss += loss
     else:
         model.dropout_rate = 0.5
-        enc_loss = trainer(model, opts=[optimizer_encoder], train_loader=train_loader, n_epochs=args.n_enc_epochs)
+        enc_loss = trainer(
+            model, opts=[optimizer_encoder],
+            train_loader=train_loader, n_epochs=args.n_enc_epochs)
         model.update_prior()
         model.dropout_rate = 0
-        dec_loss = trainer(model, opts=[optimizer_decoder], train_loader=train_loader, n_epochs=args.n_dec_epochs)        
+        dec_loss = trainer(
+            model, opts=[optimizer_decoder], 
+            train_loader=train_loader, n_epochs=args.n_dec_epochs)        
 
         running_loss += enc_loss+dec_loss # TODO 각각의 학습 정도를 확인하기위해 이정도는 print로 찍어줄까?
     
@@ -209,6 +223,9 @@ for epoch in range(args.epochs):
         wandb.log({'epoch': epoch, 'Loss': running_loss})
     print("="*(80+len(epoch_print)))
     if should_stop == True: break
+
+    scheduler_encoder.step()
+    scheduler_decoder.step()
 
 # -- save
 torch.save(model.state_dict(), f"{save_dir_path}/last.pth")
