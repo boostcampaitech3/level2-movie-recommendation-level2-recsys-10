@@ -1,38 +1,55 @@
 import random
+import os
+from statistics import mode 
 
 import torch
 from torch.utils.data import Dataset
+import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from utils import neg_sample
 
 
 class DeepFMDataset(Dataset):
-    def __init__(self, deepfm_data_dir):
-        # deepfm_train.json 불러와서 input, targer tensor 변환
-        self.df = pd.read_json(deepfm_data_dir)
-        self.user_col = torch.tensor(self.df.loc[:, 'user'])
-        self.item_col = torch.tensor(self.df.loc[:, 'item'])
-        self.year_col = torch.tensor(self.df.loc[:, 'year'])
-        self.genre_col = torch.tensor(self.df.loc[:, 'genre'])
+    def __init__(self, rating, year, genre, valid_size=10, mode = 'train'):
+        self.mode = mode
+        self.valid_size = valid_size
+
+        self.rating_df =rating
+        self.year_dict = year
+        self.genres_dict = genre
+    
+        self.n_user = self.rating_df['user'].nunique()
+        self.n_item = self.rating_df['item'].nunique()
         
-        self.input_tensor = torch.cat([self.user_col.unsqueeze(1), self.item_col.unsqueeze(1), 
-                                        self.year_col.unsqueeze(1), self.genre_col], dim=1).long()
-        self.target_tensor = torch.tensor(list(self.df.loc[:, 'rating'])).long()
-        
-    def __len__(self):
-        return self.target_tensor.size(0)
-        
-    def __getitem__(self,index):
-        return self.input_tensor[index], self.target_tensor[index]
+        self.n_year = len(set(self.year_dict.values()))
+        self.users = self.rating_df['user'].unique()
+        self.rating_df = rating.groupby('user')['item'].agg(lambda x : list(x))
+        print("data load done")
 
     def get_num_context(self):
-        users = list(set(self.user_col))
-        items = list(set(self.item_col))
-        genres = list(set(self.year_col))
+        return self.n_user, self.n_item, self.n_year
+    def pos_or_neg(self):
+        return np.random.rand()
 
-        n_user = len(users)
-        n_item = len(items)
-        n_genre = len(genres)
+    def __len__(self):
+        return self.n_user
+        
+    def __getitem__(self,user_id):
+        if self.pos_or_neg() > 0.5: # positive
+            pos_set = self.rating_df[user_id][:-self.valid_size]
+            self.item_selected = np.random.choice(pos_set)
+            self.target = np.array(1)
 
-        return n_user,n_item,n_genre
+        else: # negative
+            pos_set = self.rating_df[user_id][:-self.valid_size]
+            self.item_selected = np.random.randint(1, self.n_item - 1)
+            while self.item_selected in pos_set:
+                self.item_selected = np.random.randint(1, self.n_item - 1)
+            self.target = np.array(0)
+        # self.item_selected = self.item_selected
+        genre_selected = self.genres_dict[self.item_selected]
+        year_selected = self.year_dict[self.item_selected]
+        self.input = np.array([user_id, self.item_selected, year_selected, *genre_selected])
+        return self.input, self.target
