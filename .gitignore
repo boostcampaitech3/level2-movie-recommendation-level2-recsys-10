@@ -37,3 +37,6 @@ __pycache__
 .netrc
 .screenrc
 *test.ipynb
+
+## shell script
+*run.sh 
