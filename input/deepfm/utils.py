@@ -56,3 +56,51 @@ def neg_sample_popular(popular_item_list, item_set, num_neg = 50,
     neg_items = np.random.choice(popular_item_list, num_neg, replace=False)
 
     return neg_items
+
+###### metric ######
+def recall(pred, target):
+    tp, fn = 0,0
+    for p, t in zip(pred,target):
+        if p == 1 and t==1 :
+            tp += 1
+        elif p == 0 and t==1 :
+            fn += 1
+    return tp / (tp + fn + 1e-10)
+
+def precision(pred, target):
+    tp, fp = 0, 0
+    for p, t in zip(pred,target):
+        if p == 1 and t==1 :
+            tp += 1
+        elif p == 1 and t==0 :
+            fp += 1
+    return tp / (tp + fp + 1e-10)
+
+def f1_score(pred, target):
+    p_score=precision(pred, target)
+    r_score = recall(pred, target)
+
+    return 2*(p_score * r_score) / (p_score + r_score)
+
+def recall(pred, target):
+    tp, fn = 0,0
+    for i,p in enumerate(pred):
+        if p == 1 and target[i] == 1 :
+            tp += 1
+        elif p == 1 and target[i] == 0:
+            fn += 1
+    return tp / (tp + fn + 1e-10)
+
+def precision(pred, target):
+    tp, fp = 0, 0
+    for i,p in enumerate(pred):
+        if p == 1 and target[i] == 1 :
+            tp += 1
+        elif p == 0 and target[i] == 1:
+            fp += 1
+    return tp / (tp + fp + 1e-10)
+
+def f1_score(pred, target):
+    p_score=precision(pred, target)
+    r_score = recall(pred, target)
+    return 2*(p_score * r_score) / (p_score + r_score +  1e-10)
