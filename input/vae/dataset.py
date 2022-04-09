@@ -20,6 +20,16 @@ class BaseDataset(Dataset):
         # data_path는 사용자의 디렉토리에 맞게 설정해야 합니다.
         data_path = os.path.join(self.path, 'train/train_ratings.csv')
         df = pd.read_csv(data_path)
+
+        ############### item based outlier ###############
+        # 아이템 기준 outlier 제거 - 이용율 0.3% 미만인 아이템 제거 (영구히 제거)
+        item_freq_df = (df.groupby('item')['user'].count()/df.user.nunique()).reset_index()
+        item_freq_df.columns = ['item', 'item_freq']
+        # df = df.merge(item_freq_df, on='item').query('item_freq > 0.003')
+        df = df.merge(item_freq_df, on='item').query('item_freq > 0.005')
+        # df = df.merge(item_freq_df, on='item').query('item_freq > 0.01')
+        del df['item_freq'] # 소명을 다하고 삭제! 
+
         self.ratings_df = df.copy() # for submission
         self.n_train = len(df)
 
@@ -41,6 +51,12 @@ class BaseDataset(Dataset):
         self.exist_items = list(df['item_idx'].unique())
         self.exist_users = list(df['user_idx'].unique())
 
+        ############### Used by Sampler ###############
+        # # 1. user-based outlier - 상위 20퍼센트 영화를 본 친구들 Weight=0 지정
+        # self.user_weights = np.ones_like(self.exist_users)
+        # outlier_users = df['user_idx'].unique()[df.groupby('user_idx').item_idx.count()/df['item_idx'].nunique() >= 0.4]
+        # self.user_weights[outlier_users] = 0
+
         t1 = time()
         self.train_items, self.valid_items = {}, {}
         
@@ -51,7 +67,6 @@ class BaseDataset(Dataset):
                 num_u_valid_items = min(int(len(item)*0.125), 10) # 유저가 소비한 아이템의 12.5%, 그리고 최대 10개의 데이터셋을 무작위로 Validation Set으로 활용한다.
                 u_valid_items = np.random.choice(item, size=num_u_valid_items, replace=False)
                 self.valid_items[uid] = u_valid_items
-                # if len(item) <= 1000 and len(item) >= 30 : # 훈련에 사용할 데이터는 이상치 제거하고
                 self.train_items[uid] = list(set(item) - set(u_valid_items))
 
 
