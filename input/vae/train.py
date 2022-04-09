@@ -10,7 +10,7 @@ from utils import set_seed, get_lr, increment_path, check_path, early_stopping, 
 from models import multivae, recvae
 from importlib import import_module
 import os
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler, Sampler
 from dataset import BaseDataset, ValidDataset
 from  torch.optim.lr_scheduler import StepLR, MultiStepLR, ReduceLROnPlateau
 
@@ -72,7 +72,16 @@ check_path(save_dir_path)
 train_dataset = BaseDataset(path = os.path.join(args.data_dir)) # args.path = '../data/'
 valid_dataset = ValidDataset(train_dataset = train_dataset)
 
-train_loader = DataLoader(train_dataset, batch_size=args.batch_size, drop_last=True, pin_memory=True, shuffle=True)
+# weighted_sampler = WeightedRandomSampler(
+#     weights= train_dataset.user_weights,
+#     num_samples=len(train_dataset.user_weights),
+#     replacement=True
+# )
+
+# train_loader = DataLoader(
+#     train_dataset, batch_size=args.batch_size, drop_last=True, pin_memory=True, #shuffle=True, 
+#     sampler= weighted_sampler)
+train_loader = DataLoader(train_dataset, batch_size=args.batch_size,drop_last=True, pin_memory=True, shuffle=True)
 valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, drop_last=False, pin_memory=True, shuffle=False)
 
 # -- model
