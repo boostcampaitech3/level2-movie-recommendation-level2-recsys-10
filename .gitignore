@@ -36,3 +36,4 @@ __MACOSX/
 __pycache__
 .netrc
 .screenrc
+*test.ipynb
