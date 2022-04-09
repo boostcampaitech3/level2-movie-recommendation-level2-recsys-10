@@ -22,13 +22,13 @@ class BaseDataset(Dataset):
         df = pd.read_csv(data_path)
 
         ############### item based outlier ###############
-        # 아이템 기준 outlier 제거 - 이용율 0.3% 미만인 아이템 제거 (영구히 제거)
-        item_freq_df = (df.groupby('item')['user'].count()/df.user.nunique()).reset_index()
-        item_freq_df.columns = ['item', 'item_freq']
-        # df = df.merge(item_freq_df, on='item').query('item_freq > 0.003')
-        df = df.merge(item_freq_df, on='item').query('item_freq > 0.005')
+        # # 아이템 기준 outlier 제거 - 이용율 0.3% 미만인 아이템 제거 (영구히 제거)
+        # item_freq_df = (df.groupby('item')['user'].count()/df.user.nunique()).reset_index()
+        # item_freq_df.columns = ['item', 'item_freq']
+        # # df = df.merge(item_freq_df, on='item').query('item_freq > 0.003')
+        # # df = df.merge(item_freq_df, on='item').query('item_freq > 0.005')
         # df = df.merge(item_freq_df, on='item').query('item_freq > 0.01')
-        del df['item_freq'] # 소명을 다하고 삭제! 
+        # del df['item_freq'] # 소명을 다하고 삭제! 
 
         self.ratings_df = df.copy() # for submission
         self.n_train = len(df)
@@ -124,3 +124,32 @@ class ValidDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.train_input_data[idx, :], self.valid_input_data[idx,:]
+
+class BeforeNoiseUnderSamplingDataset(BaseDataset):
+    def __init__(self, path='../data/', mode='train'):
+        super().__init__(path, mode)
+
+    # def noise_without_pos(self, u, num):
+    #     pos_items = self.train_input_data[u]
+    #     # n_pos_items = len(pos_items)
+    #     pos_batch = []
+    #     while True:
+    #         if len(pos_batch) == num: break
+    #         pos_id = np.random.randint(low=0, high=n_pos_items, size=1)[0]
+    #         pos_i_id = pos_items[pos_id]
+
+    #         if pos_i_id not in pos_batch:
+    #             pos_batch.append(pos_i_id)
+    #     return pos_batch
+
+
+    def __getitem__(self, idx):
+        # noise = np.random.choice(2, size=[*self.train_input_data.shape], p=[0.9, 0.1])
+        # train_input_data_noised = self.train_input_data - noise
+        # train_input_data_noised[train_input_data_noised < 0] = 0
+        # return train_input_data_noised[idx,:]
+        # noise = np.random.choice(2, size=[*self.train_input_data.shape], p=[0.9, 0.1])
+        # noise = np.random.choice(2, size= len(self.train_input_data[idx,:]),  p=[0.9, 0.1]).astype(np.float32)
+        # train_input_data_noised = self.train_input_data + noise
+        # train_input_data_noised[train_input_data_noised < 0] = 0
+        return self.train_input_data[idx,:], np.random.randint(0,2,size=self.train_input_data.shape[1]).astype(np.float32)
