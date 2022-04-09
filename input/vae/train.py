@@ -11,7 +11,7 @@ from models import multivae, recvae
 from importlib import import_module
 import os
 from torch.utils.data import DataLoader, WeightedRandomSampler, Sampler
-from dataset import BaseDataset, ValidDataset
+from dataset import BaseDataset, ValidDataset, BeforeNoiseUnderSamplingDataset
 from  torch.optim.lr_scheduler import StepLR, MultiStepLR, ReduceLROnPlateau
 
 import wandb
@@ -70,6 +70,7 @@ check_path(save_dir_path)
 
 # -- dataset
 train_dataset = BaseDataset(path = os.path.join(args.data_dir)) # args.path = '../data/'
+# train_dataset = BeforeNoiseUnderSamplingDataset(path = os.path.join(args.data_dir)) # args.path = '../data/'
 valid_dataset = ValidDataset(train_dataset = train_dataset)
 
 # weighted_sampler = WeightedRandomSampler(
@@ -77,7 +78,6 @@ valid_dataset = ValidDataset(train_dataset = train_dataset)
 #     num_samples=len(train_dataset.user_weights),
 #     replacement=True
 # )
-
 # train_loader = DataLoader(
 #     train_dataset, batch_size=args.batch_size, drop_last=True, pin_memory=True, #shuffle=True, 
 #     sampler= weighted_sampler)
@@ -113,7 +113,6 @@ today = datetime.now(timezone('Asia/Seoul'))
 print("Start at " + str(today))
 print("Using " + str(device) + " for computations")
 print("Params on CUDA: " + str(next(model.parameters()).is_cuda))
-results = {"Epoch": [], "Loss": [], "Valid_Loss":[], "Recall": [], "Training Time": []} #, "NDCG": []
 
 # -- trainer module
 def trainer(model, opts, train_loader, n_epochs, beta=args.beta, gamma=args.gamma):
@@ -174,6 +173,8 @@ for epoch in range(args.epochs):
     # print valid evaluation metrics every N epochs (provided by args.eval_N)
     if epoch % args.eval_N  == (args.eval_N - 1):
         recall_list = []
+        recall_list_20 = []
+        recall_list_50 = []
         ndcg_list = []
         total_loss = 0.0
         model.eval()
@@ -195,26 +196,25 @@ for epoch in range(args.epochs):
                 recon_batch[input_data.cpu().numpy().nonzero()] = -np.inf
 
                 _recall = Recall_at_k_batch(recon_batch, label_data, args.k) # (users:batch_size, recall:1)
-                # _ndcg = NDCG_binary_at_k_batch(recon_batch, label_data, args.k) # TODO 현재 데이터 셋에 맞게 수정해준다. 
+                _recall_20 = Recall_at_k_batch(recon_batch, label_data, 20) # (users:batch_size, recall:1)
+                _recall_50 = Recall_at_k_batch(recon_batch, label_data, 50) # (users:batch_size, recall:1)
 
                 recall_list.append(_recall)
-                # ndcg_list.append(_ndcg)
+                recall_list_20.append(_recall_20)
+                recall_list_50.append(_recall_50)
 
         total_loss /= (train_dataset.n_users//args.batch_size) 
         recall_list = (np.concatenate(recall_list))
+        recall_list_20 = (np.concatenate(recall_list_20))
+        recall_list_50 = (np.concatenate(recall_list_50))
         recall = np.mean(recall_list)
-        # ndcg = np.concatenate(ndcg_list).mean()
-        print(f"[Valid] time: {time()-t2:4.2}s | Loss: {total_loss:4.4} | Recall@{args.k}: {recall:.4}")
+        recall20 = np.mean(recall_list_20)
+        recall50 = np.mean(recall_list_50)
+        print(f"[Valid] time: {time()-t2:4.2}s | Loss: {total_loss:4.4} | Recall@{args.k}: {recall:.4} | Recall@20: {recall20:.4} | Recall@50: {recall50:.4} | ")
         cur_best_metric, stopping_step, should_stop = early_stopping(recall, cur_best_metric, stopping_step, flag_step=20)
 
         # save results in dict
-        results['Epoch'].append(epoch)
-        results['Loss'].append(running_loss)
-        results['Valid_Loss'].append(total_loss)
-        results['Recall'].append(recall)
-        # results['NDCG'].append(ndcg.item())
-        results['Training Time'].append(training_time)
-        wandb.log({'epoch': epoch, 'Loss': running_loss, 'recall@10':recall})
+        wandb.log({'epoch': epoch, 'Loss': running_loss, 'recall@10':recall, 'recall@20':recall20, 'recall@50':recall50})
         
         if best_score < recall : 
             best_score = recall
@@ -222,13 +222,6 @@ for epoch in range(args.epochs):
             torch.save(model.state_dict(), f"{save_dir_path}/best.pth")
     
     else : 
-        # save results in dict
-        results['Epoch'].append(epoch)
-        results['Loss'].append(running_loss)
-        results['Valid_Loss'].append(None)
-        results['Recall'].append(None)
-        # results['NDCG'].append(None)
-        results['Training Time'].append(training_time)
         wandb.log({'epoch': epoch, 'Loss': running_loss})
     print("="*(80+len(epoch_print)))
     if should_stop == True: break
