@@ -103,4 +103,4 @@ def precision(pred, target):
 def f1_score(pred, target):
     p_score=precision(pred, target)
     r_score = recall(pred, target)
-    return 2*(p_score * r_score) / (p_score + r_score +  1e-10)
+    return 2*(p_score * r_score) / (p_score + r_score +  1e-10), p_score,r_score

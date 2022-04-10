@@ -9,7 +9,7 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 from sklearn.preprocessing import MultiLabelBinarizer, LabelEncoder
 
-from utils import set_seed, f1_score
+from utils import precision, recall, set_seed, f1_score
 from models.deepfm import DeepFM
 from dataset import DeepFMDataset
 
@@ -24,14 +24,14 @@ def main():
     
     parser.add_argument('--v', type=str, default='1')
     parser.add_argument('--data_dir', type=str, default='../data/train')
-    parser.add_argument("--output_dir", default="../../output/", type=str)
+    parser.add_argument("--output_dir", default="./output/", type=str)
     parser.add_argument('--model', type=str, default='deepfm', help='Model Name (deepfm)')
     parser.add_argument('--valid_size', type=int, default=10, help='valid size per user')
     parser.add_argument('--mlp_dims', nargs='+', type=int, default=[30,20,10], help = 'Multi-Layer-Perceptron dimensions list')
     parser.add_argument('--embedding_dim', type=int, default=10, help='embedding_dim for input tensor')
-    parser.add_argument('--drop_rate', type=float, default=0.2, help='Drop rate')
+    parser.add_argument('--drop_rate', type=float, default=0.1, help='Drop rate')
     parser.add_argument('--lr', type=float, default=5e-3, help='learning rate')
-    parser.add_argument("--lr_decay_step", type=int, default=200, help="default: 50") 
+    parser.add_argument("--lr_decay_step", type=int, default=100, help="default: 200") 
     parser.add_argument('--epoch', type=int, default=10000, help='num of epochs')
     
     parser.add_argument("--wandb_name", type=str, default='-', help=" ")
@@ -49,7 +49,7 @@ def main():
     device = torch.device("cuda" if use_cuda else "cpu")
 
     if args.model == 'deepfm':
-        print("Dataset setting")
+        print("Dataset setting") 
         ############
         rating = pd.read_csv(os.path.join(args.data_dir, 'train_ratings.csv'))
         genres = pd.read_csv(os.path.join(args.data_dir, 'genres.tsv'), sep='\t')
@@ -60,7 +60,7 @@ def main():
         null_year = [1921,1920,1919,1915,1916,1917,1902,2015]
         missing_year = pd.DataFrame({'item':not_year, 'year':null_year})
         year = pd.concat([year, missing_year])
-
+        
         users = list(set(rating.loc[:,'user']))
         users.sort()
         items =  list(set((rating.loc[:, 'item'])))
@@ -92,9 +92,9 @@ def main():
 
         #####################################
         valid_size = args.valid_size
-        train_dataset = DeepFMDataset(rating, year, genres, valid_size, mode = 'train')
+        train_dataset = DeepFMDataset(rating, year, genres, valid_size, mode = 'seq')
         print("train setting done")
-        test_dataset = DeepFMDataset(rating, year, genres, valid_size, mode = 'valid')
+        test_dataset = DeepFMDataset(rating, year, genres, valid_size, mode = 'static')
         print("valid setting done")
         n_user,n_item,n_year = train_dataset.get_num_context()
 
@@ -111,7 +111,7 @@ def main():
         bce_loss = nn.BCELoss() # Binary Cross Entropy loss
 
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
-        scheduler = StepLR(optimizer, args.lr_decay_step, gamma=1)
+        scheduler = StepLR(optimizer, args.lr_decay_step, gamma=0.1)
 
         losses = [1]
         
@@ -143,20 +143,27 @@ def main():
             # 10 epoch 마다 val
             if e % 10 == 0:
                 correct_result_sum = 0
-                f1 = []
+                f1, precision, recall= [],[],[]
+                
                 for x, y in test_loader:
                     x, y = x.to(device), y.to(device)
                     model.eval()
                     output = model(x)
                     result = torch.round(output)
                     correct_result_sum += (result == y).sum().float()
-                    f1.append(f1_score(result, y))
+                    f1_, precision_, recall_ = f1_score(result, y)
+                    f1.append(f1_)
+                    precision.append(precision_)
+                    recall.append(recall_)
                 acc = correct_result_sum/len(test_dataset)*100
                 f1 = sum(f1)/len(f1)
-                wandb.log({'epoch': e, 'Loss': loss, 'Acc': acc, 'F1':f1})
-                print("Acc : {:.2f}%".format(acc.item()))
-                print("F1-score : {:.2f}%".format(f1*100))
-
+                precision = sum(precision)/len(precision)
+                recall = sum(recall)/len(recall)
+                wandb.log({'epoch': e, 'Loss': loss, 'Acc': acc, 'F1':f1, 'Recall':recall, 'Precision':precision})
+                print("Acc : {:.2f}%".format(acc.item()), end = '\t')
+                print("F1-score : {:.2f}%".format(f1*100), end = '\t')
+                print("Recall : {:.2f}%".format(recall*100), end = '\t')
+                print("Precision : {:.2f}%".format(precision*100))
 if __name__ == '__main__':
     main()
 
