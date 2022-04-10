@@ -79,12 +79,10 @@ def main():
         if len(users)-1 != max(users):
             users_dict = {users[i]: i for i in range(len(users))}
             rating_df['user']  = rating_df['user'].map(lambda x : users_dict[x])
-            users = list(set(rating_df.loc[:,'user']))
             
         if len(items)-1 != max(items):
             items_dict = {items[i]: i for i in range(len(items))}
             rating_df['item']  = rating_df['item'].map(lambda x : items_dict[x])
-            items =  list(set((rating_df.loc[:, 'item'])))
 
         rating_df = rating_df.sort_values(by=['user'])
         rating_df.reset_index(drop=True, inplace=True)

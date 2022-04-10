@@ -6,6 +6,7 @@ from torch.optim import Adam
 
 from utils import ndcg_k, recall_at_k
 
+
 class Trainer:
     def __init__(
         self,
@@ -127,7 +128,6 @@ class PretrainTrainer(Trainer):
             submission_dataloader,
             args,
         )
-        
 
     def pretrain(self, epoch, pretrain_dataloader):
 
@@ -221,13 +221,11 @@ class FinetuneTrainer(Trainer):
             submission_dataloader,
             args,
         )
-        
-        
 
     def iteration(self, epoch, dataloader, mode="train"):
 
         # Setting the tqdm progress bar
-        
+
         rec_data_iter = tqdm.tqdm(
             enumerate(dataloader),
             desc="Recommendation EP_%s:%d" % (mode, epoch),
@@ -253,8 +251,6 @@ class FinetuneTrainer(Trainer):
                 rec_avg_loss += loss.item()
                 rec_cur_loss = loss.item()
 
-                
-
             post_fix = {
                 "epoch": epoch,
                 "rec_avg_loss": "{:.4f}".format(rec_avg_loss / len(rec_data_iter)),
@@ -263,8 +259,6 @@ class FinetuneTrainer(Trainer):
 
             if (epoch + 1) % self.args.log_freq == 0:
                 print(str(post_fix))
-            
-            
 
         else:
             self.model.eval()
@@ -310,3 +304,68 @@ class FinetuneTrainer(Trainer):
                 return pred_list
             else:
                 return self.get_full_sort_score(epoch, answer_list, pred_list)
+
+
+class DeepFMTrainer(Trainer):
+    """
+    Deep FM 모델을 학습하기 위한 Train 클래스
+    iteration 구현 
+        train Mode
+        val Mode
+        submission Mode 
+
+    """
+    def __init__(
+        self,
+        model,
+        train_dataloader,
+        eval_dataloader,
+        test_dataloader,
+        submission_dataloader,
+        args,
+    ):
+        super(DeepFMTrainer, self).__init__(
+            model,
+            train_dataloader,
+            eval_dataloader,
+            test_dataloader,
+            submission_dataloader,
+            args,
+        )
+
+    def iteration(self, epoch, dataloader, mode="train"):
+
+        # Setting the tqdm progress bar
+
+        rec_data_iter = tqdm.tqdm(
+            enumerate(range(epoch)),
+            desc="Recommendation EP_%s:%d" % (mode, epoch),
+            total=len(epoch),
+            bar_format="{l_bar}{r_bar}",
+        )
+
+        if mode == "train":
+            self.model.train()
+            #loss
+    
+            for e in rec_data_iter :
+                for x, y in train_loader:
+                    x, y = x.to(device), y.to(device)
+                    optimizer.zero_grad()
+                    output = model(x)
+                    loss = bce_loss(output, y.float())
+                    loss.backward()
+                    optimizer.step()
+        
+
+        else:
+            pass
+
+            if mode == "submidssion" :
+                pred_list = None
+                return pred_list
+    
+
+
+
+    

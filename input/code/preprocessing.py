@@ -19,7 +19,6 @@ def main():
         # rating df
         train_rating = os.path.join(data_dir, 'train_ratings.csv')
         rating_df = pd.read_csv(train_rating)
-        
         rating_df['rating'] = 1.0 # implicit feedback
         users = set(rating_df.loc[:, 'user'])
         items = set(rating_df.loc[:, 'item'])
@@ -91,9 +90,11 @@ def main():
         print("6. zero-based index done")
 
         # to_data 
-        output_path = os.path.join(data_dir,'deepfm_train.csv')
+        output_path = os.path.join(data_dir,'deepfm_train_sample.json')
+        
         rating_df.drop(columns='time',inplace=True)
-        rating_df.to_json(output_path)
+        rating_df.iloc[:1000].to_json(output_path)
+        #rating_df.to_json(output_path)
         
         print(f'{args.model} Preprocessing done!!!')
         print(f'the file located in {output_path}')
