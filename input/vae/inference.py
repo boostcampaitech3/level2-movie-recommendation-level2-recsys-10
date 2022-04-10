@@ -1,4 +1,5 @@
 import argparse, torch, os
+from cmath import exp
 import numpy as np
 import pandas as pd
 import bottleneck as bn
@@ -13,6 +14,7 @@ parser = argparse.ArgumentParser()
 # env parameter
 parser.add_argument('--seed', type=int, default='42', help=' ')
 parser.add_argument('--dataset', type=str)
+parser.add_argument('--k', type=int, default=10)
 
 # model parameter
 parser.add_argument('--model', type=str, default='RecVAE', help='model type (default: RecVAE)')
@@ -36,7 +38,12 @@ set_seed(args.seed)
 # 특정한 값을 지정해주지 않는다면, 가장 최근 저장되어있는 것을 불러오면 된다.
 # in detail, 현재 추론에 사용할 모델명을 기반으로 저장되어있는 가장 최근의 pt 파일을 가지고 오는 것이다. 
 checkpoint_path = os.path.join(args.output_dir, args.checkpoint)
-checkpoint_path = os.path.join(checkpoint_path, 'best.pth') #best.pth
+# checkpoint_path = os.path.join(checkpoint_path, 'last.pth') #best.pth
+if os.path.exists(os.path.join(checkpoint_path, 'best.pth')) : 
+    checkpoint_path = os.path.join(checkpoint_path, 'best.pth')
+else : 
+    checkpoint_path = os.path.join(checkpoint_path, 'last.pth')
+
 
 print(f"... Loaded the Saved pt. PATH: [ {checkpoint_path} ] (model: {args.model}) ...")
 print()
@@ -76,7 +83,7 @@ with torch.no_grad():
         # 상위 k 개를 밀어 넣는다
 
         X_pred[X_train>0] = 0
-        ind = np.argpartition(X_pred, -10)[:, -10:] # 우리가 하는 Task에서는 ind = item number (물론 이후에 또 바꿔줘야한다.)
+        ind = np.argpartition(X_pred, -args.k)[:, -args.k:] # 우리가 하는 Task에서는 ind = item number (물론 이후에 또 바꿔줘야한다.)
 
         if batch_index == 0 : 
             pred_list = ind
