@@ -65,9 +65,35 @@ class BaseDataset(Dataset):
             print('Creating interaction Train/ Vaild Split...')
             for uid, item in enumerate(items):            
                 num_u_valid_items = min(int(len(item)*0.125), 10) # 유저가 소비한 아이템의 12.5%, 그리고 최대 10개의 데이터셋을 무작위로 Validation Set으로 활용한다.
-                u_valid_items = np.random.choice(item, size=num_u_valid_items, replace=False)
+                ####### Original method : RANDOM #######
+                # u_valid_items = np.random.choice(item, size=num_u_valid_items, replace=False)
+                # self.valid_items[uid] = u_valid_items
+                # self.train_items[uid] = list(set(item) - set(u_valid_items))
+
+                ####### method-1 : Last sequence ####### 마지막 sequence에 있는 정보를 제거
+                # u_valid_items = item[-num_u_valid_items:]
+                # self.valid_items[uid] = u_valid_items
+                # self.train_items[uid] = list(set(item) - set(u_valid_items))
+
+                ####### method-2 : hybrid ####### 마지막꺼:무작위= 1:1
+                # num_random = int(num_u_valid_items//2 + num_u_valid_items%2) # 홀수일때는, 무작위로 뽑는것이 1개 더 많게
+                # num_last = int(num_u_valid_items - num_random)
+                # last_items = item[-num_last:]
+                # random_items = np.random.choice(item[:-num_last], size=num_random, replace=False).tolist()
+                # u_valid_items = random_items + last_items
+                # self.valid_items[uid] = u_valid_items
+                # self.train_items[uid] = list(set(item) - set(u_valid_items))
+
+                ####### method-3 : hybrid ####### 마지막꺼:무작위= 6:4
+                num_random = np.floor(num_u_valid_items*0.6).astype(int) # 홀수일때는, 무작위로 뽑는것이 1개 더 많게
+                num_last = int(num_u_valid_items - num_random)
+                last_items = item[-num_last:]
+                random_items = np.random.choice(item[:-num_last], size=num_random, replace=False).tolist()
+                u_valid_items = random_items + last_items
                 self.valid_items[uid] = u_valid_items
                 self.train_items[uid] = list(set(item) - set(u_valid_items))
+
+
 
 
             self.train_data = pd.concat({k: pd.Series(v) for k, v in self.train_items.items()}).reset_index(0)
