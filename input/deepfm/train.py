@@ -10,12 +10,19 @@ from torch.optim.lr_scheduler import StepLR,ReduceLROnPlateau,CosineAnnealingLR
 from sklearn.preprocessing import MultiLabelBinarizer, LabelEncoder
 
 from utils import precision, recall, set_seed, f1_score
-from models.deepfm import DeepFM
-from dataset import DeepFMDataset
+from models.deepfm import DeepFM,DeepFM_renew
+from dataset import DeepFMDataset,DeepFMDataset_renew
 
 import wandb
 from tqdm import tqdm
 
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def main():
     # argparser
@@ -27,14 +34,15 @@ def main():
     parser.add_argument("--output_dir", default="./output/", type=str)
     parser.add_argument('--model', type=str, default='deepfm', help='Model Name (deepfm)')
     parser.add_argument('--valid_size', type=int, default=10, help='valid size per user')
-    parser.add_argument('--mlp_dims', nargs='+', type=int, default=[200, 200, 200], help = 'Multi-Layer-Perceptron dimensions list')
-    parser.add_argument('--embedding_dim', type=int, default=400, help='embedding_dim for input tensor')
+    parser.add_argument('--mlp_dims', nargs='+', type=int, default=[80, 80, 80], help = 'Multi-Layer-Perceptron dimensions list')
+    parser.add_argument('--embedding_dim', type=int, default=200, help='embedding_dim for input tensor')
     parser.add_argument('--drop_rate', type=float, default=0.6, help='Drop rate')
+    parser.add_argument('--train_all', type=str2bool, default=True, help='num of epochs')
     parser.add_argument('--lr', type=float, default=5e-3, help='learning rate')
     parser.add_argument("--lr_decay_step", type=int, default=100, help="default: 200") 
     parser.add_argument("--gamma", type=float, default=0.1, help="default: 0.1") 
-    parser.add_argument('--epoch', type=int, default=5000, help='num of epochs')
-    
+    parser.add_argument('--epoch', type=int, default=3000, help='num of epochs')
+
     parser.add_argument("--wandb_name", type=str, default='-', help=" ")
     parser.add_argument("--save_results", action="store_true")
     args = parser.parse_args()
@@ -62,6 +70,11 @@ def main():
         missing_year = pd.DataFrame({'item':not_year, 'year':null_year})
         year = pd.concat([year, missing_year])
         
+        director = pd.read_csv(os.path.join(args.data_dir, 'directors.tsv'),sep='\t')
+        writer = pd.read_csv(os.path.join(args.data_dir, 'writers.tsv'), sep='\t')
+        writer_director = pd.concat([writer,director.rename(columns={'director':'writer'})],axis=0).rename(columns={'writer':'contributor'})
+       
+        # 유저, 아이템 Encoding
         users = list(set(rating.loc[:,'user']))
         users.sort()
         items =  list(set((rating.loc[:, 'item'])))
@@ -75,27 +88,47 @@ def main():
             rating['item']  = rating['item'].map(lambda x : items_dict[x])
             year['item']  = year['item'].map(lambda x : items_dict[x])
             genres['item']  = genres['item'].map(lambda x : items_dict[x])
-
+            director['item'] = director['item'].map(lambda x : items_dict[x])
+            writer['item'] = writer['item'].map(lambda x : items_dict[x])
+            writer_director['item'] = writer_director['item'].map(lambda x : items_dict[x])
+        # year LabelEncoding
         le = LabelEncoder()
         year['year'] = le.fit_transform(year['year'])
-        
         year = {i:v for i,v in zip(year['item'], le.fit_transform(year['year']))}
-        
+        # genre LabelEncoding
+        genre_series = genres.sort_values(['item','genre']).groupby('item')['genre'].apply(list).apply(str) # pd.Series item,genres
+        genre_le=le.fit_transform(genre_series.values)
+        genres = {i:v for i,v in zip(genre_series.index, genre_le)}
+        # director LabelEncoding
+        # A,B,C 
+        A_list = list(set(director['item'].values))  # 5503
+        B_list = list(set(writer_director['item'].values) - set(director['item'].values) )  # 675
+        C_list = list(set(rating['item'].values) - set(writer_director['item'].values)) # 629
+
+        director_group = director.groupby('item')['director'].apply(list)
+        director_group = director_group.apply(lambda x:x[0]).to_dict()
+        writer_group = writer.groupby('item')['writer'].apply(list)
+        writer_group = writer_group.apply(lambda x:x[0]).to_dict()
+        for i in B_list:
+            director_group[i] = writer_group[i]
+        for i in C_list:
+            director_group[i] = 'no_direct'    
+
+        director = {i:v for i,v in zip(director_group.keys(), le.fit_transform(list(director_group.values())))}    
         # genre Multi Label Binarize 
-        genre_dict = {genre:i for i, genre in enumerate(set(genres['genre']))}
-        genres['genre'] = genres['genre'].map(lambda x : genre_dict[x])
-        genres = genres.groupby('item')['genre'].agg(lambda x : list(x))
-        mlb = MultiLabelBinarizer()
-        multi_genres = mlb.fit_transform(genres.values)
-        genres = {i:v for i,v in zip(genres.index, multi_genres)}
+        # genre_dict = {genre:i for i, genre in enumerate(set(genres['genre']))}
+        # genres['genre'] = genres['genre'].map(lambda x : genre_dict[x])
+        # genres = genres.groupby('item')['genre'].agg(lambda x : list(x))
+        # mlb = MultiLabelBinarizer()
+        # multi_genres = mlb.fit_transform(genres.values)
+        # genres = {i:v for i,v in zip(genres.index, multi_genres)}
 
         #####################################
         valid_size = args.valid_size
-        train_dataset = DeepFMDataset(rating, year, genres, valid_size, mode = 'seq')
-        print("train setting done")
-        test_dataset = DeepFMDataset(rating, year, genres, valid_size, mode = 'static')
-        print("valid setting done")
-        n_user,n_item,n_year = train_dataset.get_num_context()
+        tarin_all = args.train_all
+        train_dataset = DeepFMDataset_renew(rating, year, genres,director,  valid_size, mode = 'static', train_all = tarin_all)
+        test_dataset = DeepFMDataset_renew(rating, year, genres,director, valid_size, mode = 'seq', train_all = tarin_all)
+        n_user,n_item,n_year,n_genre,n_director = train_dataset.get_num_context()
 
         train_loader = DataLoader(train_dataset, batch_size=3920, shuffle=True, num_workers=3)
         test_loader = DataLoader(test_dataset, batch_size=3920, shuffle=True, num_workers=3)
@@ -103,16 +136,21 @@ def main():
 
         #####################################
         # config setting
-        input_dims = [n_user, n_item, n_year]
+        if args.train_all:
+            input_dims = [n_user,n_item,n_year,n_genre,n_director]
+        else: 
+            input_dims = [n_user,n_year,n_genre,n_director]
+            print('Train_all : False')
+        print(input_dims)
         embedding_dim = args.embedding_dim
         mlp_dims = args.mlp_dims
-        model = DeepFM(input_dims, embedding_dim, mlp_dims=mlp_dims).to(device)
+        model = DeepFM_renew(input_dims, embedding_dim, mlp_dims=mlp_dims, drop_rate=args.drop_rate).to(device)
         bce_loss = nn.BCELoss() # Binary Cross Entropy loss
 
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
         # scheduler = StepLR(optimizer, args.lr_decay_step, gamma=args.gamma)
-        # scheduler = ReduceLROnPlateau(optimizer, patience=100,mode='min')
-        scheduler = CosineAnnealingLR(optimizer, T_max=100, eta_min=0)
+        scheduler = ReduceLROnPlateau(optimizer, patience=100,mode='min')
+        # scheduler = CosineAnnealingLR(optimizer, T_max=100, eta_min=0)
         losses = [100]
         
         print("Training Strat")
@@ -136,9 +174,9 @@ def main():
             print("[Learning Rate]: {}".format(scheduler.optimizer.state_dict()['param_groups'][0]['lr']))
             # 모델 저장
             if loss == min(losses):
-                save_path = os.path.join(args.output_dir,f'DeepFM_{args.v}.pt')
+                save_path = os.path.join(args.output_dir,f'DeepFM_renew_{args.v}.pt')
                 torch.save(model.state_dict(), save_path)
-                print(f'Model Saved, DeepFM_{args.v}.pt')
+                print(f'Model Saved, DeepFM_renew_{args.v}.pt')
 
             # 10 epoch 마다 val
             if e % 10 == 0:
@@ -165,7 +203,7 @@ def main():
                 print("Recall : {:.2f}%".format(recall*100), end = '\t')
                 print("Precision : {:.2f}%".format(precision*100))
 
-                
+
 if __name__ == '__main__':
     main()
 
