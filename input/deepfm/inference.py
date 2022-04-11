@@ -9,7 +9,16 @@ from tqdm import tqdm
 
 from sklearn.preprocessing import MultiLabelBinarizer, LabelEncoder
 
-from models.deepfm import DeepFM
+from models.deepfm import DeepFM, DeepFM_renew
+from dataset import DeepFMDataset_renew, DeepFMDataset
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def main():
     # argparser
@@ -19,98 +28,135 @@ def main():
 
     parser.add_argument('--data_dir', type=str, default='../data/train')
     parser.add_argument("--output_dir", default="./output/", type=str)
-    parser.add_argument('--mlp_dims', nargs='+', type=int, default=[30,20,10], help = 'Multi-Layer-Perceptron dimensions list')
-    parser.add_argument('--embedding_dim', type=int, default=10, help='embedding_dim for input tensor')
+    parser.add_argument("--model", type=str, default='')
+    parser.add_argument("--candidate", type=str, default='submission-RecVAE-top50.csv')
 
+    parser.add_argument('--train_all', type=str2bool, default=True, help='num of epochs')
+    parser.add_argument('--mlp_dims', nargs='+', type=int, default=[80, 80, 80], help = 'Multi-Layer-Perceptron dimensions list')
+    parser.add_argument('--embedding_dim', type=int, default=200, help='embedding_dim for input tensor')
     args = parser.parse_args()
 
-    # 모델 불러오기
-    model_dir = args.output_dir
-    model_name = "DeepFM_3.pt"
-    use_cuda = torch.cuda.is_available()
-    device = torch.device("cuda" if use_cuda else "cpu")
-
-    input_dims = [31360, 6807, 101]
-
-    model = DeepFM(input_dims, args.embedding_dim, mlp_dims=[30, 20, 10]).to(device)
-    model.load_state_dict(torch.load(os.path.join(model_dir, model_name)))
-    print('model setting done!')
-
-    ##### 데이터 셋 구성 #####
+    ############################################
+    ##### 데이터 셋 구성 전처리 #####
     data_dir = "../data/train"
     # 유저, 아이템, year,genre index 인코딩
     rating_df = pd.read_csv(os.path.join(data_dir, 'train_ratings.csv'))   
     genres_df = pd.read_csv(os.path.join(data_dir, 'genres.tsv'), sep='\t') 
     years_df = pd.read_csv(os.path.join(data_dir,'years.tsv'), sep='\t')
+    print("Dataset setting") 
     
+    rating = pd.read_csv(os.path.join(args.data_dir, 'train_ratings.csv'))
+    genres = pd.read_csv(os.path.join(args.data_dir, 'genres.tsv'), sep='\t')
+    year = pd.read_csv(os.path.join(args.data_dir,'years.tsv'), sep='\t')
     # year 결측치 처리
-    not_year = list(set(rating_df['item']) - set(years_df['item']))
+    not_year = list(set(rating['item']) - set(year['item']))
     not_year.sort()
     null_year = [1921,1920,1919,1915,1916,1917,1902,2015]
     missing_year = pd.DataFrame({'item':not_year, 'year':null_year})
-    years_df = pd.concat([years_df, missing_year])
-
-    # user, item 인코딩을 위한 리스트
-    users = list(set(rating_df.loc[:,'user']))
+    year = pd.concat([year, missing_year])
+    
+    director = pd.read_csv(os.path.join(args.data_dir, 'directors.tsv'),sep='\t')
+    writer = pd.read_csv(os.path.join(args.data_dir, 'writers.tsv'), sep='\t')
+    writer_director = pd.concat([writer,director.rename(columns={'director':'writer'})],axis=0).rename(columns={'writer':'contributor'})
+    
+    # 유저, 아이템 Encoding
+    users = list(set(rating.loc[:,'user']))
     users.sort()
-    items =  list(set((rating_df.loc[:, 'item'])))
+    items =  list(set((rating.loc[:, 'item'])))
     items.sort()
-
-    output_dif = '../../output/'
-    submission_name = 'deepfm_submission.csv'
-
+    rating_origin = rating.copy()
     # rerank시 rating_df / submission 이름 변경 
+    submission_name = args.model + '_all.csv'
     if args.rerank:
-        candidate_file = 'submission-RecVAE-top50.csv'
-        rating_df = pd.read_csv(os.path.join(data_dir, candidate_file))
-        submission_name = 'deepfm_submission_rerank.csv'
+        candidate_file = args.candidate
+        rating = pd.read_csv(os.path.join(data_dir, candidate_file))
+        submission_name = args.model + 'submission.csv'
         print(f'##Rerank-Mode by {candidate_file} to {submission_name}##')
 
-    # User, Item Label 인코딩    
     if len(users)-1 != max(users):
         users_dict = {users[i]: i for i in range(len(users))}
-        rating_df['user']  = rating_df['user'].map(lambda x : users_dict[x])
+        rating['user']  = rating['user'].map(lambda x : users_dict[x])
+        rating_origin['user']  = rating_origin['user'].map(lambda x : users_dict[x])
 
     if len(items)-1 != max(items):
         items_dict = {items[i]: i for i in range(len(items))}
-        rating_df['item']  = rating_df['item'].map(lambda x : items_dict[x])
-        years_df['item']  = years_df['item'].map(lambda x : items_dict[x])
-        genres_df['item']  = genres_df['item'].map(lambda x : items_dict[x])
-    
-    # Year Label 인코딩
+        rating['item']  = rating['item'].map(lambda x : items_dict[x])
+        rating_origin['item']  = rating_origin['item'].map(lambda x : items_dict[x])
+        
+        year['item']  = year['item'].map(lambda x : items_dict[x])
+        genres['item']  = genres['item'].map(lambda x : items_dict[x])
+        director['item'] = director['item'].map(lambda x : items_dict[x])
+        writer['item'] = writer['item'].map(lambda x : items_dict[x])
+        writer_director['item'] = writer_director['item'].map(lambda x : items_dict[x])
+        
+    # year LabelEncoding
     le = LabelEncoder()
-    mlb = MultiLabelBinarizer()
-    years_df['year'] = le.fit_transform(years_df['year'])
-    years_df = years_df.sort_values(by='item').reset_index().drop(columns='index')
+    year['year'] = le.fit_transform(year['year'])
+    year = {i:v for i,v in zip(year['item'], le.fit_transform(year['year']))}
+    # genre LabelEncoding
+    genre_series = genres.sort_values(['item','genre']).groupby('item')['genre'].apply(list).apply(str) # pd.Series item,genres
+    genre_le=le.fit_transform(genre_series.values)
+    genres = {i:v for i,v in zip(genre_series.index, genre_le)}
+    # director LabelEncoding
+    # A,B,C 
+    A_list = list(set(director['item'].values))  # 5503
+    B_list = list(set(writer_director['item'].values) - set(director['item'].values) )  # 675
+    C_list = list(set(rating_origin['item'].values) - set(writer_director['item'].values)) # 629
 
-    # genre Multi Label Binarize 
-    genre_dict = {genre:i for i, genre in enumerate(set(genres_df['genre']))}
-    genres_df['genre'] = genres_df['genre'].map(lambda x : genre_dict[x])
-    genres_df = genres_df.groupby('item')['genre'].agg(lambda x : list(x))
-    multi_genres = mlb.fit_transform(genres_df.values)
-    genres_df = pd.DataFrame([genres_df.index, multi_genres]).T.rename({0:'item',1:'genre'},axis =1)
+    director_group = director.groupby('item')['director'].apply(list)
+    director_group = director_group.apply(lambda x:x[0]).to_dict()
+    writer_group = writer.groupby('item')['writer'].apply(list)
+    writer_group = writer_group.apply(lambda x:x[0]).to_dict()
+    for i in B_list:
+        director_group[i] = writer_group[i]
+    for i in C_list:
+        director_group[i] = 'no_direct'    
 
-    # 영화 데이터에 장르, 연도 합치는 함수
+    director = {i:v for i,v in zip(director_group.keys(), le.fit_transform(list(director_group.values())))}  
+    
+    ########################################
+
+    model_dir = args.output_dir
+    model_name = args.model+".pt"
+    use_cuda = torch.cuda.is_available()
+    device = torch.device("cuda" if use_cuda else "cpu")
+    train_all = args.train_all
+    
+    dataset = DeepFMDataset_renew(rating_origin, year, genres,director,  valid_size=10, mode = 'seq', train_all = train_all)
+    n_user,n_item,n_year,n_genre,n_director = dataset.get_num_context()
+    if args.train_all:
+        input_dims = [n_user,n_item,n_year,n_genre,n_director]
+    else: 
+        input_dims = [n_user, n_year,n_genre,n_director]
+
+    model = DeepFM_renew(input_dims, args.embedding_dim, mlp_dims = args.mlp_dims).to(device)
+    model.load_state_dict(torch.load(os.path.join(model_dir, model_name)))
+    print('model setting done!')
+
+    ########################################
     def make_joined_vector(user, items):
-        user = torch.tensor([user for _ in range(len(items))]).unsqueeze(1)
-        genre = torch.from_numpy(np.vstack(genres_df.loc[items]['genre'].values).astype(float))
-        year = torch.tensor(years_df.loc[items]['year'].values).unsqueeze(1)
-        items = torch.tensor(items).unsqueeze(1)
-        return user.cuda(), items.cuda(), torch.cat([user,items,year,genre], axis = 1).type(torch.long).cuda(), 
+        user = torch.tensor([[user] for _ in range(len(items))])
+        year_ = torch.tensor([[year[i]] for i in items])
+        items_ = torch.tensor(items).unsqueeze(1)
+        director_ = torch.tensor([[director[i]] for i in items])
+        genre_ = torch.tensor([[genres[i]] for i in items])
+        if train_all:
+            return user.cuda(), items_.cuda(), torch.cat([user,items_,year_,genre_,director_], axis = 1).type(torch.long).cuda()
+        return user.cuda(), items_.cuda(), torch.cat([user,items_,year_,genre_,director_], axis = 1).type(torch.long).cuda()
     print('dataset setting done!')
 
     ##### inference #####
     # user, item set 
-    users_set = set(rating_df['user'].values)
-    items_set = set(rating_df['item'].values)
+    users_set = set(rating_origin['user'].values)
+    items_set = set(rating_origin['item'].values)
     submission = pd.DataFrame(columns=['user','item'])
     
     print("inference by user Start!")
     for user in tqdm(users_set):
         if args.rerank: # rerank 시에는 데이터에 있는 아이템들만 예측
-            pred_items = rating_df[rating_df['user']==user]['item'].values
+            pred_items = rating_origin[rating_origin['user']==user]['item'].values
         else: # rerank 안할 시에는 본 아이템 제외 모든 아이템들 예측
-            user_items_set = set(rating_df[rating_df['user']==user]['item'].values)
+            user_items_set = set(rating_origin[rating_origin['user']==user]['item'].values)
             pred_items = list(set(items_set).difference(user_items_set)) 
             
         tmp_user, tmp_item, x = make_joined_vector(user, pred_items) 
@@ -132,6 +178,128 @@ def main():
     submission['item']  = submission['item'].map(lambda x : reverse_items[x])
     # submission_name = 'to_see.csv'
     submission.to_csv(os.path.join(args.output_dir,submission_name),index=False)
+
+# def main():
+#     # argparser
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument('--seed', type=int, default='42', help=' ')
+#     parser.add_argument('--rerank', type=boolean, default=False, help='IF True: re-rank top 50 per user to top10')
+
+#     parser.add_argument('--data_dir', type=str, default='../data/train')
+#     parser.add_argument("--output_dir", default="./output/", type=str)
+#     parser.add_argument('--mlp_dims', nargs='+', type=int, default=[30,20,10], help = 'Multi-Layer-Perceptron dimensions list')
+#     parser.add_argument('--embedding_dim', type=int, default=10, help='embedding_dim for input tensor')
+
+#     args = parser.parse_args()
+
+#     # 모델 불러오기
+#     model_dir = args.output_dir
+#     model_name = "DeepFM_train_50.pt"
+#     use_cuda = torch.cuda.is_available()
+#     device = torch.device("cuda" if use_cuda else "cpu")
+
+#     input_dims = [31360, 6807, 101]
+
+#     model = DeepFM(input_dims, args.embedding_dim, mlp_dims=[30, 20, 10]).to(device)
+#     model.load_state_dict(torch.load(os.path.join(model_dir, model_name)))
+#     print('model setting done!')
+
+#     ##### 데이터 셋 구성 #####
+#     data_dir = "../data/train"
+#     # 유저, 아이템, year,genre index 인코딩
+#     rating_df = pd.read_csv(os.path.join(data_dir, 'train_ratings.csv'))   
+#     genres_df = pd.read_csv(os.path.join(data_dir, 'genres.tsv'), sep='\t') 
+#     years_df = pd.read_csv(os.path.join(data_dir,'years.tsv'), sep='\t')
+    
+#     # year 결측치 처리
+#     not_year = list(set(rating_df['item']) - set(years_df['item']))
+#     not_year.sort()
+#     null_year = [1921,1920,1919,1915,1916,1917,1902,2015]
+#     missing_year = pd.DataFrame({'item':not_year, 'year':null_year})
+#     years_df = pd.concat([years_df, missing_year])
+
+#     # user, item 인코딩을 위한 리스트
+#     users = list(set(rating_df.loc[:,'user']))
+#     users.sort()
+#     items =  list(set((rating_df.loc[:, 'item'])))
+#     items.sort()
+
+#     output_dif = '../../output/'
+#     submission_name = 'deepfm_submission.csv'
+
+#     # rerank시 rating_df / submission 이름 변경 
+#     if args.rerank:
+#         candidate_file = 'submission-RecVAE-top50.csv'
+#         rating_df = pd.read_csv(os.path.join(data_dir, candidate_file))
+#         submission_name = 'deepfm_submission_rerank.csv'
+#         print(f'##Rerank-Mode by {candidate_file} to {submission_name}##')
+
+#     # User, Item Label 인코딩    
+#     if len(users)-1 != max(users):
+#         users_dict = {users[i]: i for i in range(len(users))}
+#         rating_df['user']  = rating_df['user'].map(lambda x : users_dict[x])
+
+#     if len(items)-1 != max(items):
+#         items_dict = {items[i]: i for i in range(len(items))}
+#         rating_df['item']  = rating_df['item'].map(lambda x : items_dict[x])
+#         years_df['item']  = years_df['item'].map(lambda x : items_dict[x])
+#         genres_df['item']  = genres_df['item'].map(lambda x : items_dict[x])
+    
+#     # Year Label 인코딩
+#     le = LabelEncoder()
+#     mlb = MultiLabelBinarizer()
+#     years_df['year'] = le.fit_transform(years_df['year'])
+#     years_df = years_df.sort_values(by='item').reset_index().drop(columns='index')
+
+#     # genre Multi Label Binarize 
+#     genre_dict = {genre:i for i, genre in enumerate(set(genres_df['genre']))}
+#     genres_df['genre'] = genres_df['genre'].map(lambda x : genre_dict[x])
+#     genres_df = genres_df.groupby('item')['genre'].agg(lambda x : list(x))
+#     multi_genres = mlb.fit_transform(genres_df.values)
+#     genres_df = pd.DataFrame([genres_df.index, multi_genres]).T.rename({0:'item',1:'genre'},axis =1)
+
+#     # 영화 데이터에 장르, 연도 합치는 함수
+#     def make_joined_vector(user, items):
+#         user = torch.tensor([user for _ in range(len(items))]).unsqueeze(1)
+#         genre = torch.from_numpy(np.vstack(genres_df.loc[items]['genre'].values).astype(float))
+#         year = torch.tensor(years_df.loc[items]['year'].values).unsqueeze(1)
+#         items = torch.tensor(items).unsqueeze(1)
+#         return user.cuda(), items.cuda(), torch.cat([user,items,year,genre], axis = 1).type(torch.long).cuda(), 
+#     print('dataset setting done!')
+
+#     ##### inference #####
+#     # user, item set 
+#     users_set = set(rating_df['user'].values)
+#     items_set = set(rating_df['item'].values)
+#     submission = pd.DataFrame(columns=['user','item'])
+    
+#     print("inference by user Start!")
+#     for user in tqdm(users_set):
+#         if args.rerank: # rerank 시에는 데이터에 있는 아이템들만 예측
+#             pred_items = rating_df[rating_df['user']==user]['item'].values
+#         else: # rerank 안할 시에는 본 아이템 제외 모든 아이템들 예측
+#             user_items_set = set(rating_df[rating_df['user']==user]['item'].values)
+#             pred_items = list(set(items_set).difference(user_items_set)) 
+            
+#         tmp_user, tmp_item, x = make_joined_vector(user, pred_items) 
+#         model.eval()
+#         output = model(x)
+
+#         output = torch.cat([tmp_user, tmp_item, output.view(output.size(0),1)] , axis = 1).detach().cpu().numpy()
+#         output = pd.DataFrame(output, columns=['user','item', 'y'])
+#         output = output.sort_values(by='y', ascending=False)[:10]
+#         output.drop(columns='y',inplace=True)
+#         submission = pd.concat([submission,output])
+
+#     # Label 인코딩된 user, item을 원상복귀
+#     reverse_users= dict(map(reversed,users_dict.items()))
+#     reverse_items= dict(map(reversed,items_dict.items()))
+    
+#     # submission 생성
+#     submission['user']  = submission['user'].map(lambda x : reverse_users[x])
+#     submission['item']  = submission['item'].map(lambda x : reverse_items[x])
+#     # submission_name = 'to_see.csv'
+#     submission.to_csv(os.path.join(args.output_dir,submission_name),index=False)
     
 if __name__ == "__main__":
     main()
