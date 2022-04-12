@@ -1,21 +1,17 @@
 import argparse
 import os
-import wandb
 
-import numpy as np
 import torch
-import wandb
+from torch.utils.data import DataLoader, SequentialSampler
 
-from torch.utils.data import DataLoader, RandomSampler
-
-from datasets import PretrainDataset
+from datasets import SASRecDataset
 from models import S3RecModel
-from trainers import PretrainTrainer
+from trainers import FinetuneTrainer
 from utils import (
-    EarlyStopping,
     check_path,
+    generate_submission_file,
     get_item2attribute_json,
-    get_user_seqs_long,
+    get_user_seqs,
     set_seed,
 )
 
@@ -26,10 +22,10 @@ def main():
     parser.add_argument("--data_dir", default="../data/train/", type=str)
     parser.add_argument("--output_dir", default="output/", type=str)
     parser.add_argument("--data_name", default="Ml", type=str)
+    parser.add_argument("--do_eval", action="store_true")
 
     # model args
-    parser.add_argument("--model_name", default="Pretrain", type=str)
-
+    parser.add_argument("--model_name", default="Finetune_full", type=str)
     parser.add_argument(
         "--hidden_size", type=int, default=64, help="hidden size of transformer model"
     )
@@ -60,18 +56,6 @@ def main():
     parser.add_argument("--log_freq", type=int, default=1, help="per epoch print res")
     parser.add_argument("--seed", default=42, type=int)
 
-    # pre train args
-    parser.add_argument(
-        "--pre_epochs", type=int, default=300, help="number of pre_train epochs"
-    )
-    parser.add_argument("--pre_batch_size", type=int, default=512)
-
-    parser.add_argument("--mask_p", type=float, default=0.2, help="mask probability")
-    parser.add_argument("--aap_weight", type=float, default=0.2, help="aap loss weight")
-    parser.add_argument("--mip_weight", type=float, default=1.0, help="mip loss weight")
-    parser.add_argument("--map_weight", type=float, default=1.0, help="map loss weight")
-    parser.add_argument("--sp_weight", type=float, default=0.5, help="sp loss weight")
-
     parser.add_argument(
         "--weight_decay", type=float, default=0.0, help="weight_decay of adam"
     )
@@ -82,26 +66,19 @@ def main():
         "--adam_beta2", type=float, default=0.999, help="adam second beta value"
     )
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
-    parser.add_argument("--wandb_name")
 
     args = parser.parse_args()
-    wandb.init(project="movierec_pretrain", entity="egsbj")
-    wandb.run.name = args.wandb_name
-    wandb.config.update(args)
 
     set_seed(args.seed)
     check_path(args.output_dir)
 
-    args.checkpoint_path = os.path.join(args.output_dir, "Pretrain.pt")
-
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
     args.cuda_condition = torch.cuda.is_available() and not args.no_cuda
 
-    # args.data_file = args.data_dir + args.data_name + '.txt'
     args.data_file = args.data_dir + "train_ratings.csv"
     item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
-    # concat all user_seq get a long sequence, from which sample neg segment for SP
-    user_seq, max_item, long_sequence = get_user_seqs_long(args.data_file)
+
+    user_seq, max_item, _, _, submission_rating_matrix = get_user_seqs(args.data_file)
 
     item2attribute, attribute_size = get_item2attribute_json(item2attribute_file)
 
@@ -109,35 +86,33 @@ def main():
     args.mask_id = max_item + 1
     args.attribute_size = attribute_size + 1
 
+    # save model args
+    args_str = f"{args.model_name}-{args.data_name}"
+
+    print(str(args))
+
     args.item2attribute = item2attribute
 
+    args.train_matrix = submission_rating_matrix
+
+    checkpoint = args_str + ".pt"
+    args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
+
+    submission_dataset = SASRecDataset(args, user_seq, data_type="submission")
+    submission_sampler = SequentialSampler(submission_dataset)
+    submission_dataloader = DataLoader(
+        submission_dataset, sampler=submission_sampler, batch_size=args.batch_size
+    )
+
     model = S3RecModel(args=args)
-    trainer = PretrainTrainer(model, None, None, None, None, args)
 
-    early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
+    trainer = FinetuneTrainer(model, None, None, None, submission_dataloader, args)
 
-    for epoch in range(args.pre_epochs):
+    trainer.load(args.checkpoint_path)
+    print(f"Load model from {args.checkpoint_path} for submission!")
+    preds = trainer.submission(0)
 
-        pretrain_dataset = PretrainDataset(args, user_seq, long_sequence)
-        pretrain_sampler = RandomSampler(pretrain_dataset)
-        pretrain_dataloader = DataLoader(
-            pretrain_dataset, sampler=pretrain_sampler, batch_size=args.pre_batch_size
-        )
-
-        losses = trainer.pretrain(epoch, pretrain_dataloader)
-        wandb.log(losses)
-
-        wandb.log({"epoch" : losses['epoch'],
-            "aap_loss_avg" : losses['aap_loss_avg'],
-            "mip_loss_avg" : losses['mip_loss_avg'],
-            "map_loss_avg" : losses['map_loss_avg'],
-            "sp_loss_avg" : losses['sp_loss_avg']})
-
-        ## comparing `sp_loss_avg``
-        early_stopping(np.array([-losses["sp_loss_avg"]]), trainer.model)
-        if early_stopping.early_stop:
-            print("Early stopping")
-            break
+    generate_submission_file(args.data_file, preds)
 
 
 if __name__ == "__main__":
