@@ -70,7 +70,7 @@ class DeepFM_renew(nn.Module):
 
         self.embedding = nn.Embedding(total_input_dim, embedding_dim) 
         self.embedding_dim = (len(input_dims)) * embedding_dim # 필드 갯수(4) * embedding_dim
-
+        
         mlp_layers = []
         for i, dim in enumerate(mlp_dims):
             if i==0:

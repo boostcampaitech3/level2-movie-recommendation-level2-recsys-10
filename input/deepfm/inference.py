@@ -142,7 +142,7 @@ def main():
         genre_ = torch.tensor([[genres[i]] for i in items])
         if train_all:
             return user.cuda(), items_.cuda(), torch.cat([user,items_,year_,genre_,director_], axis = 1).type(torch.long).cuda()
-        return user.cuda(), items_.cuda(), torch.cat([user,items_,year_,genre_,director_], axis = 1).type(torch.long).cuda()
+        return user.cuda(), items_.cuda(), torch.cat([user,year_,genre_,director_], axis = 1).type(torch.long).cuda()
     print('dataset setting done!')
 
     ##### inference #####
