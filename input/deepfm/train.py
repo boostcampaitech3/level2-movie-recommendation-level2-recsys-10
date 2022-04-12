@@ -32,6 +32,7 @@ def main():
     parser.add_argument('--v', type=str, default='1')
     parser.add_argument('--data_dir', type=str, default='../data/train')
     parser.add_argument("--output_dir", default="./output/", type=str)
+    parser.add_argument("--mode", default="static", type=str)
     parser.add_argument('--model', type=str, default='deepfm', help='Model Name (deepfm)')
     parser.add_argument('--valid_size', type=int, default=10, help='valid size per user')
     parser.add_argument('--mlp_dims', nargs='+', type=int, default=[80, 80, 80], help = 'Multi-Layer-Perceptron dimensions list')
@@ -41,7 +42,7 @@ def main():
     parser.add_argument('--lr', type=float, default=5e-3, help='learning rate')
     parser.add_argument("--lr_decay_step", type=int, default=100, help="default: 200") 
     parser.add_argument("--gamma", type=float, default=0.1, help="default: 0.1") 
-    parser.add_argument('--epoch', type=int, default=3000, help='num of epochs')
+    parser.add_argument('--epoch', type=int, default=1500, help='num of epochs')
 
     parser.add_argument("--wandb_name", type=str, default='-', help=" ")
     parser.add_argument("--save_results", action="store_true")
@@ -51,7 +52,7 @@ def main():
     wandb.init(project="movierec_train", entity="egsbj")
     wandb.run.name = args.model + args.wandb_name
     wandb.config.update(args)
-
+    print(args.mlp_dims)
     # seed & device
     set_seed(args.seed)
     use_cuda = torch.cuda.is_available()
@@ -126,8 +127,13 @@ def main():
         #####################################
         valid_size = args.valid_size
         tarin_all = args.train_all
-        train_dataset = DeepFMDataset_renew(rating, year, genres,director,  valid_size, mode = 'static', train_all = tarin_all)
-        test_dataset = DeepFMDataset_renew(rating, year, genres,director, valid_size, mode = 'seq', train_all = tarin_all)
+        if args.mode == 'static':
+            train_dataset = DeepFMDataset_renew(rating, year, genres,director,  valid_size, mode = 'static', train_all = tarin_all)
+            test_dataset = DeepFMDataset_renew(rating, year, genres,director, valid_size, mode = 'seq', train_all = tarin_all)
+        else:
+            train_dataset = DeepFMDataset_renew(rating, year, genres,director,  valid_size, mode = 'seq', train_all = tarin_all)
+            test_dataset = DeepFMDataset_renew(rating, year, genres,director, valid_size, mode = 'static', train_all = tarin_all)  
+
         n_user,n_item,n_year,n_genre,n_director = train_dataset.get_num_context()
 
         train_loader = DataLoader(train_dataset, batch_size=3920, shuffle=True, num_workers=3)
