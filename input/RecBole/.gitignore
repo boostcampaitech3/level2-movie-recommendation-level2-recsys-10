@@ -13,3 +13,4 @@ saved/
 docs/build/
 wandb/*
 recbole/dataset_example/ml-100k/*
+!recbole/data/
