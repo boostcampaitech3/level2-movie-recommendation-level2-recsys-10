@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import torch.nn as nn
 from torch.utils.data import Dataset
+from tqdm import tqdm
 
 class BaseDataset(Dataset):
     def __init__(self, path = '../data/', mode = 'train'):
@@ -19,7 +20,9 @@ class BaseDataset(Dataset):
 
         # data_path는 사용자의 디렉토리에 맞게 설정해야 합니다.
         data_path = os.path.join(self.path, 'train/train_ratings.csv')
+        genre_path = os.path.join(self.path, 'train/genres.tsv')
         df = pd.read_csv(data_path)
+        genre_data = pd.read_csv(genre_path, sep='\t')
 
         ############### item based outlier ###############
         # # 아이템 기준 outlier 제거 - 이용율 0.3% 미만인 아이템 제거 (영구히 제거)
@@ -46,6 +49,7 @@ class BaseDataset(Dataset):
         df = pd.merge(df, pd.DataFrame({'item': item_ids, 'item_idx': self.item2idx[item_ids].values}), on='item', how='inner')
         df = pd.merge(df, pd.DataFrame({'user': user_ids, 'user_idx': self.user2idx[user_ids].values}), on='user', how='inner')
         df.sort_values(['user_idx', 'time'], inplace=True)
+        genre_data = df.merge(genre_data, on = 'item').copy()
         del df['item'], df['user']
 
         self.exist_items = list(df['item_idx'].unique())
@@ -93,9 +97,6 @@ class BaseDataset(Dataset):
                 self.valid_items[uid] = u_valid_items
                 self.train_items[uid] = list(set(item) - set(u_valid_items))
 
-
-
-
             self.train_data = pd.concat({k: pd.Series(v) for k, v in self.train_items.items()}).reset_index(0)
             self.train_data.columns = ['user', 'item']
 
@@ -123,6 +124,36 @@ class BaseDataset(Dataset):
             shape=(self.n_users, self.n_items))
         self.train_input_data = self.train_input_data.toarray()
 
+        print('Making Genre filter ... ')
+        genre2item = genre_data.groupby('genre')['item_idx'].apply(set).apply(list)
+        # user2genre = genre_data.groupby('user_idx')['genre'].apply(set).apply(list)
+
+        genre_data_freq = genre_data.groupby('user_idx')['genre'].value_counts(normalize=True)
+        genre_data_freq_over_5p = genre_data_freq[genre_data_freq > 0.005].reset_index('user_idx')
+        genre_data_freq_over_5p.columns = ['user_idx', 'tobedroped']
+        genre_data_freq_over_5p = genre_data_freq_over_5p.drop('tobedroped', axis = 1).reset_index()
+        user2genre = genre_data_freq_over_5p.groupby('user_idx')['genre'].apply(set).apply(list)
+
+        genre2item_dict = genre2item.to_dict()
+        all_set_genre = set(genre_data['genre'].unique())
+        user_genre_filter_dict = {}
+        for user, genres in tqdm(enumerate(user2genre)):
+            unseen_genres = all_set_genre - set(genres) # set
+            unseen_genres_item = set(sum([genre2item_dict[genre] for genre in unseen_genres], []))
+            user_genre_filter_dict[user] = pd.Series(list(unseen_genres_item), dtype=np.int32)
+
+        user_genre_filter_df = pd.concat(user_genre_filter_dict).reset_index(0)
+        user_genre_filter_df.columns = ['user', 'item']
+        user_genre_filter_df.index = range(len(user_genre_filter_df))
+
+        rows, cols = user_genre_filter_df['user'], user_genre_filter_df['item']
+        self.user_genre_filter = sp.csr_matrix(
+            (np.ones_like(rows), (rows, cols)), 
+            dtype='float32',
+            shape=(self.n_users, self.n_items))
+        self.user_genre_filter = self.user_genre_filter.toarray()
+
+
     def __len__(self):
         return self.n_users
 
@@ -130,10 +161,12 @@ class BaseDataset(Dataset):
         return self.train_input_data[idx,:]
 
 class ValidDataset(Dataset):
-    def __init__(self, train_dataset):
+    def __init__(self, train_dataset, genre_filter = False):
         self.n_users = train_dataset.n_users
         self.n_items = train_dataset.n_items
         self.train_input_data = train_dataset.train_input_data
+        self.user_genre_filter = train_dataset.user_genre_filter
+        self.genre_filter = genre_filter
 
     
         self.valid_data = train_dataset.valid_data
@@ -149,7 +182,12 @@ class ValidDataset(Dataset):
         return self.n_users
 
     def __getitem__(self, idx):
-        return self.train_input_data[idx, :], self.valid_input_data[idx,:]
+        input_data = self.train_input_data[idx, :]
+        label_data = self.valid_input_data[idx,:]
+        if self.genre_filter:
+            genre_filter = (1-self.user_genre_filter[idx,:]) > 0
+            label_data =  np.logical_and(label_data, genre_filter).astype(np.float32)
+        return input_data, label_data
 
 class BeforeNoiseUnderSamplingDataset(BaseDataset):
     def __init__(self, path='../data/', mode='train'):
