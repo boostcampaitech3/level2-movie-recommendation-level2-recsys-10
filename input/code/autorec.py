@@ -19,6 +19,7 @@ from utils import (
     train_valid_split,
     make_inter_mat,
     generate_submission_file,
+    negative_sampling,
 )
 
 
@@ -29,6 +30,16 @@ def main():
     parser.add_argument("--output_dir", default="output/", type=str)
     parser.add_argument("--data_name", default="Ml", type=str)
 
+    # data args
+    parser.add_argument("--neg_sampling", action="store_true")
+    parser.add_argument("--neg_sampling_method", type=str, default = "n_neg") # n_neg, sample_num
+    parser.add_argument(
+        "--n_negs", type=int, default=1, help="negative sample n_negs"
+    )
+    parser.add_argument(
+        "--neg_sample_num", type=int, default=50, help="negative sample num"
+    )
+
     # model args
     parser.add_argument("--model_name", default="AutoRec", type=str)
     parser.add_argument(
@@ -38,10 +49,10 @@ def main():
         "--hidden_activation", type=str, default='sigmoid', help="Autorec encoder activation function"
     )
     parser.add_argument(
-        "--out_activation", type=str, default='sigmoid', help="Autorec decoder activation function"
+        "--out_activation", type=str, default='none', help="Autorec decoder activation function"
     )
     parser.add_argument(
-        "--num_layers", type=int, default=2, help="number of layers"
+        "--num_layers", type=int, default=1, help="number of layers"
     )
     parser.add_argument("--initializer_range", type=float, default=0.02)
     parser.add_argument(
@@ -52,6 +63,9 @@ def main():
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate of adam")
     parser.add_argument(
         "--batch_size", type=int, default=256, help="number of batch_size"
+    )
+    parser.add_argument(
+        "--patience", type=int, default=10, help="early stopping patience"
     )
     parser.add_argument("--epochs", type=int, default=200, help="number of epochs")
     parser.add_argument("--no_cuda", action="store_true")
@@ -67,9 +81,24 @@ def main():
     parser.add_argument(
         "--adam_beta2", type=float, default=0.999, help="adam second beta value"
     )
+    parser.add_argument(
+        "--momentum", type=float, default=0.9, help="sgd momentum"
+    )
+
+    # scheduler
+    parser.add_argument(
+        "--scheduler_factor", type=float, default=0.1, help="scheduler factor"
+    )
+    parser.add_argument(
+        "--scheduler_eps", type=float, default=1e-09, help="scheduler epsilon"
+    )
+    parser.add_argument(
+        "--scheduler_patience", type=int, default=5, help="scheduler_patience"
+    )
+
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
-
-
+    # parser.add_argument("--candidate_K", type=int, default=30, help="candidate K")
+    
     parser.add_argument("--wandb_name", type=str)
     parser.add_argument("--wandb", action="store_true")
 
@@ -97,20 +126,35 @@ def main():
     args.log_file = os.path.join(args.output_dir, args_str + ".txt")
 
     # save model
-    checkpoint = args_str + ".pt"
+    checkpoint = args.wandb_name + ".pt"
     args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
 
-    train_set, valid_set, item_set = train_valid_split(args.data_file, args.model_name)
+    print('train valid split')
+    train_set, valid_set, item_set = train_valid_split(args)
 
+    print('make csr matrix')
     train_mat, valid_mat, item_mat = make_inter_mat(args.data_file, args.model_name, train_set, valid_set, item_set)
 
     args.train_matrix = train_mat
+    
+    # print(f'negative sampling : {args.neg_sampling}')
+    if args.neg_sampling:
+        train_neg_set, item_neg_set = negative_sampling(args, train_set, valid_set, item_set)
+
+        train_neg_mat, item_neg_mat = make_inter_mat(args.data_file, args.model_name, train_neg_set, item_neg_set)
 
     if args.model_name == 'AutoRec':
-        train_dataset = AutoRecDataset(train_mat, valid_mat)
-        eval_dataset = AutoRecDataset(train_mat, valid_mat)
-        # test_dataset = AutoRecDataset(item_mat, None)
-        submission_dataset = AutoRecDataset(item_mat, valid_mat)
+        if args.neg_sampling:
+            train_dataset = AutoRecDataset(args, item_neg_mat, valid_mat)
+            eval_dataset = AutoRecDataset(args, train_neg_mat, valid_mat)
+            # test_dataset = AutoRecDataset(args, item_mat, None)
+            submission_dataset = AutoRecDataset(args, item_neg_mat, valid_mat)
+        else:
+            train_dataset = AutoRecDataset(args, item_mat, valid_mat)
+            eval_dataset = AutoRecDataset(args, train_mat, valid_mat)
+            # test_dataset = AutoRecDataset(args, item_mat, None)
+            submission_dataset = AutoRecDataset(args, item_mat, valid_mat)
+
 
     train_dataloader = DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle = True, pin_memory = True
@@ -140,7 +184,8 @@ def main():
     
     print(model)
     
-    early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
+    
+    early_stopping = EarlyStopping(args.checkpoint_path, patience=args.patience, verbose=True)
 
     for epoch in tqdm(range(args.epochs)):
         trainer.train(epoch)

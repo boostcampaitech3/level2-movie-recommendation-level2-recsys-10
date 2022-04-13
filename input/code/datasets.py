@@ -311,7 +311,8 @@ class BERT4RecDataset(Dataset):
         return cur_tensors
 
 class AutoRecDataset(Dataset):
-    def __init__(self, inter_mat, answers_mat):
+    def __init__(self, args, inter_mat, answers_mat):
+        self.args = args
         self.inter_mat = inter_mat
         self.answers = answers_mat.argsort(axis = 1)
 
@@ -333,3 +334,65 @@ class AutoRecDataset(Dataset):
         )
 
         return cur_tensors
+
+class NCFDataset(Dataset):
+    def __init__(self, df, answers_mat):
+        # class init
+        # self.args = args
+        self.df = df
+        # self.sampling_method = self.args.neg_sampling_method
+        # self.n_negs = self.args.n_negs
+        # self.neg_sample_num = self.args.neg_sample_num
+        self.answers = answers_mat.argsort(axis = 1)
+
+        # data split
+        # self.user_list = self.df['user_idx'].unique()
+        # self.new_df = pd.DataFrame()
+
+        # for user_id in tqdm(self.user_list):
+        #     self.temp_df = self.df[self.df['user_idx'] == user_id]
+
+        #     if mode == 'submission':
+        #         size = self.args.sub_per_user
+        #         self.temp_df = self.temp_df[self.temp_df['label'] == 0].sample(size, replace = False, random_state=42)
+        #         self.new_df = pd.concat([self.new_df, self.temp_df], ignore_index = True)
+
+        #     else:
+        #         self.positive_sample = self.temp_df[self.temp_df['label'] == 1]
+                
+        #         if mode == 'train':
+        #             self.positive_sample = self.positive_sample[self.positive_sample['item_idx'].apply(lambda x : x in self.answers[user_id][:-10])] # negative sampling에서 valid 제외
+                    
+        #         elif mode == 'valid':
+        #             neg_set_size = self.args.valid_per_user - 10
+        #             self.positive_sample = self.positive_sample[self.positive_sample['item_idx'].apply(lambda x : x in self.answers[user_id][-10:])]
+
+        #         if args.neg_sampling:
+        #             if args.neg_sampling_method == 'n_neg':
+        #                 neg_set_size = len(self.positive_sample) * self.n_negs 
+        #             else:
+        #                 neg_set_size = self.neg_sample_num
+
+        #             self.negative_sample = self.temp_df[self.temp_df['label'] == 0].sample(neg_set_size, replace = False, random_state=42)
+                
+        #             self.new_df = pd.concat([self.new_df, self.positive_sample, self.negative_sample], ignore_index = True)
+                
+        #         else: 
+        #             self.new_df = pd.concat([self.new_df, self.positive_sample], ignore_index = True)
+
+        # self.df = self.new_df
+
+        # dataloader getitem
+        self.users = torch.tensor(self.df['user_idx'].values)
+        self.items = torch.tensor(self.df['item_idx'].values)
+        self.labels = torch.tensor(self.df['label'].values)
+        
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, index):
+        users = self.users[index]
+        items = self.items[index]
+        labels = self.labels[index]
+        answers = torch.tensor(self.answers[users][-10:])
+        return (users, items, labels.float(), answers)

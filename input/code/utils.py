@@ -178,31 +178,44 @@ def generate_submission_file(data_file, preds, model_name):
             result.append((users[index], idx2item[item]))
 
     pd.DataFrame(result, columns=["user", "item"]).to_csv(
-        "output/submission.csv", index=False
+        f"output/{model_name}_submission.csv", index=False
     )
 
-def generate_implicit_df(df, rating_matrix):
-    user_ids = df['user_idx'].unique()
-    item_ids = df['item_idx'].unique()
+def generate_implicit_df(pos_dataset, dataset):
+    # df = pd.read_csv(data_file)
+    # df = item_encoding(df, model_name)
+    
+    pos_dataset = pos_dataset
+    dataset = dataset
+
+    user_ids = dataset.keys()
+    # item_ids = df['item_idx'].unique()
 
     implicit_df = dict()
-    implicit_df['user'] = list()
-    implicit_df['item'] = list()
+    implicit_df['user_idx'] = list()
+    implicit_df['item_idx'] = list()
     implicit_df['label'] = list()
-    user_dict = dict()
-    item_dict = dict()
+    # user_dict = dict()
+    # item_dict = dict()
 
-    for u, user_id in tqdm(enumerate(user_ids)):
-        user_dict[u] = user_id
-        for i, item_id in enumerate(item_ids):
-            if i not in item_dict:
-                item_dict[i] = item_id
-            implicit_df['user'].append(u)
-            implicit_df['item'].append(i)
-            if pd.isna(ratings_matrix.loc[user_id, item_id]):
-                implicit_df['label'].append(0)
+
+    for user_id in tqdm(user_ids):
+        # user_dict[u] = user_id
+        item_ids = dataset[user_id]
+        if pos_dataset:
+            pos_item_ids = pos_dataset[user_id]
+        for item_id in item_ids:
+            # if i not in item_dict:
+                # item_dict[i] = item_id
+            implicit_df['user_idx'].append(user_id)
+            implicit_df['item_idx'].append(item_id)
+            if pos_dataset:
+                if item_id in pos_item_ids:
+                    implicit_df['label'].append(1)
+                else:
+                    implicit_df['label'].append(0)
             else:
-                implicit_df['label'].append(1)
+                implicit_df['label'].append(0)
 
     implicit_df = pd.DataFrame(implicit_df)
 
@@ -231,12 +244,9 @@ def item_encoding(df, model_name):
 
     return rating_df
 
-def train_valid_split(data_file, model_name):
-    df = pd.read_csv(data_file)
-    df = item_encoding(df, model_name)
-
-    num_users = df['user_idx'].nunique()
-    num_items = df['item_idx'].nunique()
+def train_valid_split(args):
+    df = pd.read_csv(args.data_file)
+    df = item_encoding(df, args.model_name)
 
     items = df.groupby("user_idx")["item_idx"].apply(list)
     # {"user_id" : [items]}
@@ -255,6 +265,74 @@ def train_valid_split(data_file, model_name):
         item_set[uid] = list(set(item))
 
     return train_set, valid_set, item_set
+
+def negative_sampling(args, *datasets):
+    df = pd.read_csv(args.data_file)
+    df = item_encoding(df, args.model_name)
+
+    users_list = df['user_idx'].unique()
+    items_list = df['item_idx'].unique()
+
+    train_set, valid_set, item_set = datasets
+    neg_sample_set = {}
+    # submission_set = {}
+
+    for uid in tqdm(users_list):
+        if args.neg_sampling_method == 'n_neg':
+            neg_set_size = args.n_negs * len(train_set[uid])
+        else:
+            neg_set_size = args.neg_sample_num
+
+        neg_sample_set[uid] = list(set(items_list) - set(item_set[uid]))
+        u_neg_set = np.random.choice(neg_sample_set[uid], size=neg_set_size, replace=False)  
+        train_set[uid] = list(set(train_set[uid]).union(set(u_neg_set)))
+        item_set[uid] = list(set(train_set[uid]).union(set(valid_set[uid])))
+
+        # # valid_set negative sampling
+        # neg_set_size = args.valid_per_user - len(valid_set[uid])
+        # valid_u_neg_set = np.random.choice(neg_sample_set[uid], size=neg_set_size, replace=False)
+        # valid_set[uid] = list(set(valid_set[uid]).union(set(valid_u_neg_set)))
+
+        # # valid_set negative sampling
+        # neg_set_size = args.sub_per_user
+        # sub_u_neg_set = np.random.choice(neg_sample_set[uid], size=neg_set_size, replace=False)
+        # submission_set[uid] = list(set(sub_u_neg_set))
+
+    return train_set, item_set
+
+def negative_sampling_ncf(args, *datasets):
+    df = pd.read_csv(args.data_file)
+    df = item_encoding(df, args.model_name)
+
+    users_list = df['user_idx'].unique()
+    items_list = df['item_idx'].unique()
+
+    train_set, valid_set, item_set = datasets
+    neg_sample_set = {}
+    submission_set = {}
+
+    for uid in tqdm(users_list):
+        if args.neg_sampling_method == 'n_neg':
+            neg_set_size = args.n_negs * len(train_set[uid])
+        else:
+            neg_set_size = args.neg_sample_num
+
+        neg_sample_set[uid] = list(set(items_list) - set(item_set[uid]))
+        u_neg_set = np.random.choice(neg_sample_set[uid], size=neg_set_size, replace=False)  
+        train_set[uid] = list(set(train_set[uid]).union(set(u_neg_set)))
+        item_set[uid] = list(set(train_set[uid]).union(set(valid_set[uid])))
+
+        # valid_set negative sampling
+        neg_set_size = args.valid_per_user - len(valid_set[uid])
+        valid_u_neg_set = np.random.choice(neg_sample_set[uid], size=neg_set_size, replace=False)
+        valid_set[uid] = list(set(valid_set[uid]).union(set(valid_u_neg_set)))
+
+        # valid_set negative sampling
+        neg_set_size = args.sub_per_user
+        sub_u_neg_set = np.random.choice(neg_sample_set[uid], size=neg_set_size, replace=False)
+        submission_set[uid] = list(set(sub_u_neg_set))
+
+    return train_set, item_set, valid_set, submission_set
 
 def make_inter_mat(data_file, model_name, *datasets):
     df = pd.read_csv(data_file)

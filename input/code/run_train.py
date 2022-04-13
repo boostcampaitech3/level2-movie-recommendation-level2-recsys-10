@@ -174,12 +174,17 @@ def main():
         scores, _ = trainer.valid(epoch)
         
         # 3. wandb log
-        wandb.log({"recall@5" : scores[0],
-                   "ndcg@5" : scores[1],
-                   "recall@10" : scores[2],
-                   "ndcg@10" : scores[3]})
-
-        early_stopping(np.array([scores[2]]), trainer.model)
+        wandb.log({"recall@1" : scores[0], 
+                   "ndcg@1" : scores[1],
+                #    "recall@5" : scores[0], 
+                #    "ndcg@5" : scores[1], 
+                #    "recall@10" : scores[2],
+                #    "ndcg@10" : scores[3]}
+                   "recall@4" : scores[2],
+                   "ndcg@4" : scores[3]})
+                   
+        # early_stopping(np.array([scores[2]]), trainer.model)
+        early_stopping(np.array([scores[0]]), trainer.model)
         if early_stopping.early_stop:
             print("Early stopping")
             break

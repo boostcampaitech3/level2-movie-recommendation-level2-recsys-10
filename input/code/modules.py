@@ -191,6 +191,43 @@ class Encoder(nn.Module):
             all_encoder_layers.append(hidden_states)
         return all_encoder_layers
 
+class MLPLayers(nn.Module):
+
+    def __init__(self, layers, dropout, activation='relu'):
+        super(MLPLayers, self).__init__()
+        
+        # initialize Class attributes
+        self.layers = layers
+        self.n_layers = len(self.layers) - 1
+        self.dropout = dropout
+        self.activation = activation
+        
+        # define layers
+        mlp_modules = list()
+        for i in range(self.n_layers):
+            mlp_modules.append(nn.Dropout(p=self.dropout))
+            input_size = self.layers[i] 
+            output_size = self.layers[i + 1] 
+            mlp_modules.append(nn.Linear(input_size, output_size))
+            activation_function = activation_layer(self.activation)
+            if activation_function is not None:
+                mlp_modules.append(activation_function)
+
+        self.mlp_layers = nn.Sequential(*mlp_modules)
+        
+        self._init_weights()
+        
+    # initialize weights
+    def _init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    m.bias.data.fill_(0.0)
+    
+    def forward(self, input_feature):
+        return self.mlp_layers(input_feature)
+        
 def activation_layer(activation_name='relu'):
     """
     Construct activation layers
@@ -222,3 +259,11 @@ def activation_layer(activation_name='relu'):
         raise NotImplementedError("activation function {} is not implemented".format(activation_name))
 
     return activation
+
+class BPR_Loss(nn.Module):
+    def __init__(self):
+        super(BPR_Loss, self).__init__()
+    
+    def forward(self, pos, neg):
+        bpr_loss = -torch.mean(torch.log(torch.sigmoid(pos - neg)))
+        return bpr_loss

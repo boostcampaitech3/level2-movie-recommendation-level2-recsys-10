@@ -17,7 +17,7 @@ from implicit.nearest_neighbours import (
     bm25_weight,
 )
 
-from modules import Encoder, LayerNorm, activation_layer
+from modules import Encoder, LayerNorm, activation_layer, MLPLayers
 from utils import mf_sgd, get_predicted_full_matrix, get_rmse, item_encoding, als, get_ALS_loss
 
 
@@ -614,3 +614,138 @@ class AutoRec(nn.Module):
         output = self.decoder(h)
         
         return output
+
+class NCF(nn.Module):
+
+    def __init__(self, args):
+        super(NCF, self).__init__()
+        
+        # initialize Class attributes
+        self.args = args
+        self.user_item_data = self.args.train_matrix
+        self.n_users, self.n_items = self.user_item_data.shape
+        self.emb_dim = self.args.hidden_size
+        self.num_layers = self.args.num_layers
+        self.layers = [self.emb_dim * 2 // (2 ** i) for i in range(self.num_layers + 1)]
+        self.dropout = self.args.dropout_rate
+        self.activation = self.args.hidden_activation
+        
+        # define layers
+        self.user_embedding = nn.Embedding(self.n_users, self.emb_dim) 
+        self.item_embedding = nn.Embedding(self.n_items, self.emb_dim) 
+        self.mlp_layers = MLPLayers(self.layers, self.dropout, self.activation)
+        self.predict_layer = nn.Linear(self.layers[-1] , 1) 
+        self.activation_layer = activation_layer(self.activation)
+        
+        self._init_weights()
+        
+    # initialize weights
+    def _init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Embedding):
+                torch.nn.init.normal_(m.weight, mean=0.0, std=0.01)
+            elif isinstance(m, nn.Linear):
+                nn.init.kaiming_uniform_(m.weight, a=1, nonlinearity="sigmoid")
+                if m.bias is not None:
+                    m.bias.data.fill_(0.0)
+
+
+    
+    def forward(self, user, item):   
+        user_emb = self.user_embedding(user) 
+        item_emb = self.item_embedding(item) 
+        
+        input_feature = torch.cat((user_emb, item_emb), -1) 
+        mlp_output =  self.mlp_layers(input_feature) 
+        output = self.predict_layer(mlp_output) 
+        output = self.activation_layer(output)
+        return output.squeeze(-1)
+
+class GMF(nn.Module):
+    def __init__(self, args):
+        super(GMF, self).__init__()
+        self.args = args
+        self.user_item_data = self.args.train_matrix
+        self.n_users, self.n_items = self.user_item_data.shape
+        self.emb_dim = self.args.hidden_size
+        self.activation = self.args.hidden_activation
+
+        self.user_embedding = nn.Embedding(self.n_users, self.emb_dim)
+        self.item_embedding = nn.Embedding(self.n_items, self.emb_dim)
+        
+        self.predict_layer = nn.Linear(self.emb_dim, 1, bias = False)
+        self.activation_layer = activation_layer(self.activation)
+        
+        self._init_weights()
+        
+    # initialize weights
+    def _init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Embedding):
+                torch.nn.init.normal_(m.weight, mean=0.0, std=0.01)
+            elif isinstance(m, nn.Linear):
+                nn.init.kaiming_uniform_(m.weight, a=1, nonlinearity="sigmoid")
+                if m.bias is not None:
+                    m.bias.data.fill_(0.0)
+    
+    def forward(self, user, item):
+        user_emb = self.user_embedding(user)
+        item_emb = self.item_embedding(item)
+        gmf = user_emb * item_emb
+
+        output = self.predict_layer(gmf) 
+        output = self.activation_layer(output)
+
+        return output.squeeze(-1)
+
+class NeuMF(nn.Module):
+
+    def __init__(self, args, NCF, GMF):
+        super(NeuMF, self).__init__()
+        
+        # initialize Class attributes
+        self.args = args
+        self.NCF = NCF
+        self.GMF = GMF
+
+        self.activation = self.args.hidden_activation
+        
+        # predict_layer input 
+        self.NCF_predict_input = self.NCF.predict_layer.weight.shape[1]
+        self.GMF_predict_input = self.GMF.predict_layer.weight.shape[1]
+        self.predict_input = self.NCF_predict_input + self.GMF_predict_input
+
+        # define layers
+        self.GMF_user_embedding = self.GMF.user_embedding
+        self.GMF_item_embedding = self.GMF.item_embedding
+        self.NCF_user_embedding = self.NCF.user_embedding
+        self.NCF_item_embedding = self.NCF.item_embedding  
+        self.mlp_layers = self.NCF.mlp_layers
+        self.predict_layer = nn.Linear(self.predict_input, 1, bias = False) 
+        self.activation_layer = activation_layer(self.activation)
+        
+        self._init_weights()
+        
+    # initialize weights
+    def _init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_uniform_(m.weight, a=1, nonlinearity="sigmoid")
+                if m.bias is not None:
+                    m.bias.data.fill_(0.0)
+    
+    def forward(self, user, item):   
+        GMF_user_emb = self.GMF_user_embedding(user) 
+        GMF_item_emb = self.GMF_item_embedding(item)
+        gmf = GMF_user_emb * GMF_item_emb
+
+        NCF_user_emb = self.NCF_user_embedding(user) 
+        NCF_item_emb = self.NCF_item_embedding(item)
+        
+        NCF_input_feature = torch.cat((NCF_user_emb, NCF_item_emb), -1) 
+        ncf_output = self.mlp_layers(NCF_input_feature)
+        gmf_ncf_concat = torch.cat((gmf, ncf_output), -1) 
+
+        output = self.predict_layer(gmf_ncf_concat) 
+        output = self.activation_layer(output)
+        return output.squeeze(-1)
