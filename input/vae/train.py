@@ -41,6 +41,7 @@ parser.add_argument("--lr_decay_step", type=int, default=1000, help="default: 10
 parser.add_argument('--not-alternating', type=bool, default=False)
 parser.add_argument("--eval_N", type=int, default=1, help=" ")
 parser.add_argument("--k", type=int, default=10, help=" ")
+parser.add_argument("--genre_filter", type=bool, default=False, help=" ")
 
 # path
 parser.add_argument("--data_dir", type=str, default='../data/', help=" ")
@@ -71,7 +72,7 @@ check_path(save_dir_path)
 # -- dataset
 train_dataset = BaseDataset(path = os.path.join(args.data_dir)) # args.path = '../data/'
 # train_dataset = BeforeNoiseUnderSamplingDataset(path = os.path.join(args.data_dir)) # args.path = '../data/'
-valid_dataset = ValidDataset(train_dataset = train_dataset)
+valid_dataset = ValidDataset(train_dataset = train_dataset, genre_filter = args.genre_filter)
 
 # weighted_sampler = WeightedRandomSampler(
 #     weights= train_dataset.user_weights,
@@ -183,13 +184,12 @@ for epoch in range(args.epochs):
             for batch_data in valid_loader:
                 input_data, label_data = batch_data # label_data = validation set 추론에도 사용되지 않고 오로지 평가의 정답지로 사용된다. 
                 input_data = input_data.to(device)
-                label_data = label_data.cpu().numpy()#.to(device)
+                label_data = label_data.cpu().numpy()#.to(device)                
 
                 recon_batch, mu, logvar = model(input_data)
                 _, loss = model.loss_function(recon_batch, input_data, mu, logvar, gamma=1, beta=None)
 
                 total_loss += loss.item()
-
 
                 # calculate evaluation metrics
                 recon_batch = recon_batch.cpu().numpy()
