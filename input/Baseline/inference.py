@@ -4,9 +4,9 @@ import os
 import torch
 from torch.utils.data import DataLoader, SequentialSampler
 
-from datasets import SASRecDataset
-from models import S3RecModel
-from trainers import FinetuneTrainer
+from datasets import SASRecDataset, BERT4RecDataset
+from models import S3RecModel, BERT4RecModel
+from trainers import FinetuneTrainer, BERT4RecTrainer
 from utils import (
     check_path,
     generate_submission_file,
@@ -25,7 +25,7 @@ def main():
     parser.add_argument("--do_eval", action="store_true")
 
     # model args
-    parser.add_argument("--model_name", default="Finetune_full", type=str)
+    parser.add_argument("--model_name", default="SASRec", type=str)
     parser.add_argument(
         "--hidden_size", type=int, default=64, help="hidden size of transformer model"
     )
@@ -66,6 +66,8 @@ def main():
         "--adam_beta2", type=float, default=0.999, help="adam second beta value"
     )
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
+    parser.add_argument("--mask_p", type=float, default=0.15, help="mask probability")
+    parser.add_argument("--rm_position", action="store_true", help="remove position embedding")
 
     args = parser.parse_args()
 
@@ -78,7 +80,7 @@ def main():
     args.data_file = args.data_dir + "train_ratings.csv"
     item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
 
-    user_seq, max_item, _, _, submission_rating_matrix = get_user_seqs(args.data_file)
+    user_seq, max_item, _, _, submission_rating_matrix = get_user_seqs(args.data_file, args.model_name)
 
     item2attribute, attribute_size = get_item2attribute_json(item2attribute_file)
 
@@ -98,21 +100,29 @@ def main():
     checkpoint = args_str + ".pt"
     args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
 
-    submission_dataset = SASRecDataset(args, user_seq, data_type="submission")
+    if args.model_name == 'SASRec':
+        submission_dataset = SASRecDataset(args, user_seq, data_type="submission")
+    elif args.model_name == 'BERT4Rec':
+        submission_dataset = BERT4RecDataset(args, user_seq, data_type="submission")
+
     submission_sampler = SequentialSampler(submission_dataset)
     submission_dataloader = DataLoader(
         submission_dataset, sampler=submission_sampler, batch_size=args.batch_size
     )
 
-    model = S3RecModel(args=args)
+    if args.model_name == 'SASRec':
+        model = S3RecModel(args=args)
+        trainer = FinetuneTrainer(model, None, None, None, submission_dataloader, args)
 
-    trainer = FinetuneTrainer(model, None, None, None, submission_dataloader, args)
+    elif args.model_name == 'BERT4Rec':
+        model = BERT4RecModel(args=args)
+        trainer = BERT4RecTrainer(model, None, None, None, submission_dataloader, args)
 
     trainer.load(args.checkpoint_path)
     print(f"Load model from {args.checkpoint_path} for submission!")
     preds = trainer.submission(0)
 
-    generate_submission_file(args.data_file, preds)
+    generate_submission_file(args.data_file, preds, args.model_name)
 
 
 if __name__ == "__main__":

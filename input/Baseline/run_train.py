@@ -1,14 +1,15 @@
 import argparse
 import os
 import wandb
+from tqdm import tqdm
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 
-from datasets import SASRecDataset
-from models import S3RecModel
-from trainers import FinetuneTrainer
+from datasets import SASRecDataset, BERT4RecDataset
+from models import S3RecModel, BERT4RecModel
+from trainers import FinetuneTrainer, BERT4RecTrainer
 from utils import (
     EarlyStopping,
     check_path,
@@ -26,7 +27,7 @@ def main():
     parser.add_argument("--data_name", default="Ml", type=str)
 
     # model args
-    parser.add_argument("--model_name", default="Finetune_full", type=str)
+    parser.add_argument("--model_name", default="SASRec", type=str)
     parser.add_argument(
         "--hidden_size", type=int, default=64, help="hidden size of transformer model"
     )
@@ -69,12 +70,19 @@ def main():
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
 
     parser.add_argument("--using_pretrain", action="store_true")
-    parser.add_argument("--wandb_name")
+    parser.add_argument("--mask_p", type=float, default=0.15, help="mask probability")
+    parser.add_argument("--rm_position", action="store_true", help="remove position embedding")
+    parser.add_argument("--wandb_name", type=str)
 
+    # 1. wandb init
+    #wandb.init(project="movierec_train_styoo", entity="styoo", name="SASRec_WithPretrain")
     args = parser.parse_args()
     wandb.init(project="movierec_train", entity="egsbj")
     wandb.run.name = args.wandb_name
+
+    # 2. wandb config
     wandb.config.update(args)
+    print(str(args))
 
     set_seed(args.seed)
     check_path(args.output_dir)
@@ -86,7 +94,7 @@ def main():
     item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
 
     user_seq, max_item, valid_rating_matrix, test_rating_matrix, _ = get_user_seqs(
-        args.data_file
+        args.data_file, args.model_name
     )
 
     item2attribute, attribute_size = get_item2attribute_json(item2attribute_file)
@@ -98,7 +106,6 @@ def main():
     # save model args
     args_str = f"{args.model_name}-{args.data_name}"
     args.log_file = os.path.join(args.output_dir, args_str + ".txt")
-    print(str(args))
 
     args.item2attribute = item2attribute
     # set item score in train set to `0` in validation
@@ -107,32 +114,47 @@ def main():
     # save model
     checkpoint = args_str + ".pt"
     args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
+    
+    if args.model_name == 'SASRec':
+        train_dataset = SASRecDataset(args, user_seq, data_type="train")
+        eval_dataset = SASRecDataset(args, user_seq, data_type="valid")
+        test_dataset = SASRecDataset(args, user_seq, data_type="test")
 
-    train_dataset = SASRecDataset(args, user_seq, data_type="train")
+    elif args.model_name == 'BERT4Rec':
+        train_dataset = BERT4RecDataset(args, user_seq, data_type="train")
+        eval_dataset = BERT4RecDataset(args, user_seq, data_type="valid")
+        test_dataset = BERT4RecDataset(args, user_seq, data_type="test")
+
+
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(
         train_dataset, sampler=train_sampler, batch_size=args.batch_size
     )
 
-    eval_dataset = SASRecDataset(args, user_seq, data_type="valid")
     eval_sampler = SequentialSampler(eval_dataset)
     eval_dataloader = DataLoader(
         eval_dataset, sampler=eval_sampler, batch_size=args.batch_size
     )
 
-    test_dataset = SASRecDataset(args, user_seq, data_type="test")
     test_sampler = SequentialSampler(test_dataset)
     test_dataloader = DataLoader(
         test_dataset, sampler=test_sampler, batch_size=args.batch_size
     )
+    if args.model_name == 'SASRec':
+        model = S3RecModel(args=args)
 
-    model = S3RecModel(args=args)
+        trainer = FinetuneTrainer(
+            model, train_dataloader, eval_dataloader, test_dataloader, None, args
+        )
+    
+    elif args.model_name == 'BERT4Rec':
+        model = BERT4RecModel(args=args)
 
-    trainer = FinetuneTrainer(
-        model, train_dataloader, eval_dataloader, test_dataloader, None, args
-    )
-
+        trainer = BERT4RecTrainer(
+            model, train_dataloader, eval_dataloader, test_dataloader, None, args
+        )
     print(args.using_pretrain)
+
     if args.using_pretrain:
         pretrained_path = os.path.join(args.output_dir, "Pretrain.pt")
         try:
@@ -142,20 +164,27 @@ def main():
         except FileNotFoundError:
             print(f"{pretrained_path} Not Found! The Model is same as SASRec")
     else:
-        print("Not using pretrained model. The Model is same as SASRec")
+        print(f"Not using pretrained model. The Model is same as {args.model_name}")
 
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
-    for epoch in range(args.epochs):
+
+    for epoch in tqdm(range(args.epochs)):
         trainer.train(epoch)
 
         scores, _ = trainer.valid(epoch)
-
-        wandb.log({"recall@5" : scores[0],
-                   "ndcg@5" : scores[1],
-                   "recall@10" : scores[2],
-                   "ndcg@10" : scores[3]})
-
-        early_stopping(np.array(scores[-1:]), trainer.model)
+        
+        # 3. wandb log
+        wandb.log({"recall@1" : scores[0], 
+                   "ndcg@1" : scores[1],
+                #    "recall@5" : scores[0], 
+                #    "ndcg@5" : scores[1], 
+                #    "recall@10" : scores[2],
+                #    "ndcg@10" : scores[3]}
+                   "recall@4" : scores[2],
+                   "ndcg@4" : scores[3]})
+                   
+        # early_stopping(np.array([scores[2]]), trainer.model)
+        early_stopping(np.array([scores[0]]), trainer.model)
         if early_stopping.early_stop:
             print("Early stopping")
             break
