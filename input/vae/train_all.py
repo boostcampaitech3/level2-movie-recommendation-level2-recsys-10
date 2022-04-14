@@ -7,7 +7,7 @@ from pytz import timezone
 
 from copy import deepcopy
 from utils import set_seed, get_lr, increment_path, check_path, early_stopping, Recall_at_k_batch, NDCG_binary_at_k_batch
-from models import multivae, recvae
+from models import recvae
 from importlib import import_module
 import os
 from torch.utils.data import DataLoader, WeightedRandomSampler, Sampler
