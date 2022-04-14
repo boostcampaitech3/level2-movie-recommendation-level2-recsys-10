@@ -531,6 +531,7 @@ class Implicit_model(object):
         for idx, user in enumerate(tqdm(users)):
 
             pred_items, pred_scores = self.model.recommend(user, self.user_item_data[user])
+            # pred_items, pred_scores = self.model.recommend(user, self.user_item_data[user], N=20)
             
             if idx == 0:
                 pred_list = [pred_items]

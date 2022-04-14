@@ -512,6 +512,7 @@ class AutoRecTrainer(Trainer):
                     rating_pred[self.args.train_matrix[batch_user_index] > 0] = -1
 
                     ind = np.argpartition(rating_pred, -10)[:, -10:]
+                    # ind = np.argpartition(rating_pred, -20)[:, -20:]
 
                     arr_ind = rating_pred[np.arange(len(rating_pred))[:, None], ind]
 
