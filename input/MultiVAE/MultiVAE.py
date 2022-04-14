@@ -1,7 +1,6 @@
 import os
 import argparse
 import torch
-import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import pandas as pd
@@ -19,9 +18,6 @@ import wandb
 def submission_multi_vae(args, model):
     DATA_DIR = args.data
     rating_df = pd.read_csv(os.path.join(DATA_DIR, 'train_ratings.csv'), header=0)
-
-    test_users = rating_df["user"].unique()
-    test_item_ids = rating_df['item'].unique()
 
     test_unique_uid = pd.unique(rating_df['user'])
     test_unique_sid = pd.unique(rating_df['item'])

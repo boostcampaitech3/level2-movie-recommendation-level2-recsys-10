@@ -1,7 +1,4 @@
-import os
 import pandas as pd
-from scipy import sparse
-import numpy as np
 
 def numerize(tp, profile2id, show2id):
     uid = tp['user'].apply(lambda x: profile2id[x])
