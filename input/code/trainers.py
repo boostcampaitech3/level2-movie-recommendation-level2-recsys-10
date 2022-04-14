@@ -625,6 +625,7 @@ class NCFTrainer(Trainer):
                 for i, batch in rec_data_iter:
                     batch = tuple(t.to(self.device) for t in batch)
                     users, items, _, answers = batch
+                    answers = answers[0].reshape(1, -1)
 
                     predictions = self.model(users, items)
 

@@ -327,7 +327,7 @@ def negative_sampling_ncf(args, *datasets):
         valid_u_neg_set = np.random.choice(neg_sample_set[uid], size=neg_set_size, replace=False)
         valid_set[uid] = list(set(valid_set[uid]).union(set(valid_u_neg_set)))
 
-        # valid_set negative sampling
+        # submission_set negative sampling
         neg_set_size = args.sub_per_user
         sub_u_neg_set = np.random.choice(neg_sample_set[uid], size=neg_set_size, replace=False)
         submission_set[uid] = list(set(sub_u_neg_set))

@@ -98,7 +98,7 @@ def main():
     )
 
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
-    parser.add_argument("--valid_per_user", type=int, default=10, help="valid per user")
+    parser.add_argument("--valid_per_user", type=int, default=100, help="valid per user")
     parser.add_argument("--sub_per_user", type=int, default=1000, help="submission per user")
     
     parser.add_argument("--wandb_name", type=str)
@@ -223,7 +223,7 @@ def main():
                         "ncf_recall@10" : scores[2],
                         "ncf_ndcg@10" : scores[3]})
 
-            early_stopping(np.array([scores[2]]), trainer.model)
+            early_stopping(np.array([scores[2]]), ncf_trainer.model)
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
@@ -253,7 +253,7 @@ def main():
                         "gmf_recall@10" : scores[2],
                         "gmf_ndcg@10" : scores[3]})
 
-            early_stopping(np.array([scores[2]]), trainer.model)
+            early_stopping(np.array([scores[2]]), gmf_trainer.model)
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
@@ -273,7 +273,7 @@ def main():
         print(gmf)
 
         # NeuMF model load
-        nmf = NeuMF(args, NCF = ncf, GMF = gmf).to(device)
+        nmf = NeuMF(args, NCF = ncf, GMF = gmf)
         nmf_trainer = NCFTrainer(
             nmf, train_dataloader, eval_dataloader, None, submission_dataloader, args, model_name = 'NeuMF'
         )
@@ -297,7 +297,7 @@ def main():
                         "nmf_recall@10" : scores[2],
                         "nmf_ndcg@10" : scores[3]})
 
-            early_stopping(np.array([scores[2]]), trainer.model)
+            early_stopping(np.array([scores[2]]), nmf_trainer.model)
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
