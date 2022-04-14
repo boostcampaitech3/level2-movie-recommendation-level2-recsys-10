@@ -58,10 +58,15 @@ def main():
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
     parser.add_argument("--wandb_name", type=str, help="wandb name")
 
+    # 1. wandb init
+    #wandb.init(project="movierec_train_styoo", entity="styoo", name="SASRec_WithPretrain")
     args = parser.parse_args()
     wandb.init(project="movierec_train", entity="egsbj")
     wandb.run.name = args.wandb_name
+
+    # 2. wandb config
     wandb.config.update(args)
+    print(str(args))
 
     set_seed(args.seed)
     check_path(args.output_dir)
@@ -73,11 +78,21 @@ def main():
     # save model args
     args_str = f"{args.model_name}-{args.data_name}"
     args.log_file = os.path.join(args.output_dir, args_str + ".txt")
-    print(str(args))
 
     # save model
     checkpoint = args_str + ".pt"
     args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
+    
+    if args.model_name == 'SASRec':
+        train_dataset = SASRecDataset(args, user_seq, data_type="train")
+        eval_dataset = SASRecDataset(args, user_seq, data_type="valid")
+        test_dataset = SASRecDataset(args, user_seq, data_type="test")
+
+    elif args.model_name == 'BERT4Rec':
+        train_dataset = BERT4RecDataset(args, user_seq, data_type="train")
+        eval_dataset = BERT4RecDataset(args, user_seq, data_type="valid")
+        test_dataset = BERT4RecDataset(args, user_seq, data_type="test")
+
 
     print("datasets making...")
     train_dataset = WDDataset(args, data_type="train")

@@ -7,6 +7,7 @@ import pandas as pd
 from sklearn import datasets
 
 import torch
+from tqdm import tqdm
 from torch.utils.data import Dataset
 from utils import neg_sample
 from tqdm import tqdm

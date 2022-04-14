@@ -1,6 +1,7 @@
 import argparse
 import os
 import wandb
+from tqdm import tqdm
 
 import numpy as np
 import torch
@@ -82,12 +83,17 @@ def main():
         "--adam_beta2", type=float, default=0.999, help="adam second beta value"
     )
     parser.add_argument("--gpu_id", type=str, default="0", help="gpu_id")
-    parser.add_argument("--wandb_name")
+    parser.add_argument("--wandb_name", type=str)
 
+    # 1. wandb init
+    #wandb.init(project="movierec_pretrain_styoo", entity="styoo", name="S3Rec_Pretrain")
     args = parser.parse_args()
     wandb.init(project="movierec_pretrain", entity="egsbj")
     wandb.run.name = args.wandb_name
+
+    # 2. wandb config
     wandb.config.update(args)
+    print(str(args))
 
     set_seed(args.seed)
     check_path(args.output_dir)
@@ -101,7 +107,7 @@ def main():
     args.data_file = args.data_dir + "train_ratings.csv"
     item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
     # concat all user_seq get a long sequence, from which sample neg segment for SP
-    user_seq, max_item, long_sequence = get_user_seqs_long(args.data_file)
+    user_seq, max_item, long_sequence = get_user_seqs_long(args.data_file, args.model_name)
 
     item2attribute, attribute_size = get_item2attribute_json(item2attribute_file)
 
@@ -112,11 +118,12 @@ def main():
     args.item2attribute = item2attribute
 
     model = S3RecModel(args=args)
+    
     trainer = PretrainTrainer(model, None, None, None, None, args)
 
     early_stopping = EarlyStopping(args.checkpoint_path, patience=10, verbose=True)
 
-    for epoch in range(args.pre_epochs):
+    for epoch in tqdm(range(args.pre_epochs)):
 
         pretrain_dataset = PretrainDataset(args, user_seq, long_sequence)
         pretrain_sampler = RandomSampler(pretrain_dataset)
@@ -127,11 +134,12 @@ def main():
         losses = trainer.pretrain(epoch, pretrain_dataloader)
         wandb.log(losses)
 
+        # 3. wandb log
         wandb.log({"epoch" : losses['epoch'],
-            "aap_loss_avg" : losses['aap_loss_avg'],
-            "mip_loss_avg" : losses['mip_loss_avg'],
-            "map_loss_avg" : losses['map_loss_avg'],
-            "sp_loss_avg" : losses['sp_loss_avg']})
+                   "aap_loss_avg" : losses['aap_loss_avg'],
+                   "mip_loss_avg" : losses['mip_loss_avg'],
+                   "map_loss_avg" : losses['map_loss_avg'],
+                   "sp_loss_avg" : losses['sp_loss_avg']})
 
         ## comparing `sp_loss_avg``
         early_stopping(np.array([-losses["sp_loss_avg"]]), trainer.model)
