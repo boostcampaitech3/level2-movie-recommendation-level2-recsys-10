@@ -38,3 +38,10 @@ __MACOSX/
 __pycache__
 .netrc
 .screenrc
+*test.ipynb
+
+## shell script
+*run.sh 
+my_work_*.yaml
+run_hyper*.sh
+hyper-*.test
