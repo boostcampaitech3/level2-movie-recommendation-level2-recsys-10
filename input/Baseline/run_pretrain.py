@@ -20,8 +20,16 @@ from utils import (
     set_seed,
 )
 
+import wandb
+
+
 
 def main():
+<<<<<<< HEAD:input/Baseline/run_pretrain.py
+=======
+    wandb.init(project="movie_train", name="S3Rec_train")
+
+>>>>>>> Mincheol:input/code/run_train.py
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--data_dir", default="../data/train/", type=str)
@@ -93,7 +101,11 @@ def main():
 
     # 2. wandb config
     wandb.config.update(args)
+<<<<<<< HEAD:input/Baseline/run_pretrain.py
     print(str(args))
+=======
+    
+>>>>>>> Mincheol:input/code/run_train.py
 
     set_seed(args.seed)
     check_path(args.output_dir)
@@ -105,6 +117,8 @@ def main():
 
     # args.data_file = args.data_dir + args.data_name + '.txt'
     args.data_file = args.data_dir + "train_ratings.csv"
+    wandb.config.update(args)
+
     item2attribute_file = args.data_dir + args.data_name + "_item2attributes.json"
     # concat all user_seq get a long sequence, from which sample neg segment for SP
     user_seq, max_item, long_sequence = get_user_seqs_long(args.data_file, args.model_name)
@@ -116,6 +130,37 @@ def main():
     args.attribute_size = attribute_size + 1
 
     args.item2attribute = item2attribute
+<<<<<<< HEAD:input/Baseline/run_pretrain.py
+=======
+    # set item score in train set to `0` in validation
+    args.train_matrix = valid_rating_matrix
+
+    
+
+    # save model
+    checkpoint = args_str + ".pt"
+    args.checkpoint_path = os.path.join(args.output_dir, checkpoint)
+
+    train_dataset = SASRecDataset(args, user_seq, data_type="train")
+    # RandomSampler : Batch를 뽑을때 섞으니, User들의 순서를 섞는것
+    train_sampler = RandomSampler(train_dataset)
+    train_dataloader = DataLoader(
+        train_dataset, sampler=train_sampler, batch_size=args.batch_size
+    )
+
+    eval_dataset = SASRecDataset(args, user_seq, data_type="valid")
+    # SequentialSampler : 순서대로 뽑아야 채점이 편하기에 순서대로 뽑는다, 순서대로 뽑지 않으면 유저 아이디를 매핑해야
+    eval_sampler = SequentialSampler(eval_dataset)
+    eval_dataloader = DataLoader(
+        eval_dataset, sampler=eval_sampler, batch_size=args.batch_size
+    )
+
+    test_dataset = SASRecDataset(args, user_seq, data_type="test")
+    test_sampler = SequentialSampler(test_dataset)
+    test_dataloader = DataLoader(
+        test_dataset, sampler=test_sampler, batch_size=args.batch_size
+    )
+>>>>>>> Mincheol:input/code/run_train.py
 
     model = S3RecModel(args=args)
     
@@ -141,12 +186,33 @@ def main():
                    "map_loss_avg" : losses['map_loss_avg'],
                    "sp_loss_avg" : losses['sp_loss_avg']})
 
+<<<<<<< HEAD:input/Baseline/run_pretrain.py
         ## comparing `sp_loss_avg``
         early_stopping(np.array([-losses["sp_loss_avg"]]), trainer.model)
+=======
+        wandb.log({"recall@5" : scores[0],
+                   "ndcg@5" : scores[1],
+                   "recall@10" : scores[2],
+                   "ndcg@10" : scores[3]})
+
+    
+        early_stopping(np.array(scores[-1:]), trainer.model)
+>>>>>>> Mincheol:input/code/run_train.py
         if early_stopping.early_stop:
             print("Early stopping")
             break
 
+<<<<<<< HEAD:input/Baseline/run_pretrain.py
+=======
+    trainer.args.train_matrix = test_rating_matrix
+    print("---------------Change to test_rating_matrix!-------------------")
+    # load the best model
+    trainer.model.load_state_dict(torch.load(args.checkpoint_path))
+    scores, result_info = trainer.test(0)
+    print(result_info)
+
+    
+>>>>>>> Mincheol:input/code/run_train.py
 
 if __name__ == "__main__":
     main()

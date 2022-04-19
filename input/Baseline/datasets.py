@@ -221,6 +221,7 @@ class SASRecDataset(Dataset):
     def __len__(self):
         return len(self.user_seq)
 
+<<<<<<< HEAD:input/Baseline/datasets.py
 class BERT4RecDataset(Dataset):
     def __init__(self, args, user_seq, test_neg_items=None, data_type="train"):
         self.args = args
@@ -396,3 +397,25 @@ class NCFDataset(Dataset):
         labels = self.labels[index]
         answers = torch.tensor(self.answers[users][-10:])
         return (users, items, labels.float(), answers)
+=======
+class DeepFMDataset(Dataset):
+    def __init__(self, deepfm_data_dir):
+        # deepfm_train.json 불러와서 input, targer tensor 변환
+        self.df = pd.read_json(deepfm_data_dir)
+        self.user_col = torch.tensor(self.df.loc[:, 'user'])
+        self.item_col = torch.tensor(self.df.loc[:, 'item'])
+        self.year_col = torch.tensor(self.df.loc[:, 'year'])
+        self.genre_col = torch.tensor(self.df.loc[:, 'genre'])
+        
+        self.input_tensor = torch.cat([self.user_col.unsqueeze(1), self.item_col.unsqueeze(1), 
+                                        self.year_col.unsqueeze(1), self.genre_col], dim=1).long()
+        self.target_tensor = torch.tensor(list(self.df.loc[:, 'rating'])).long()
+        
+    def __len__(self,index):
+        return self.target_tensor.size(0)
+        
+    def __getitem__(self,index):
+        return self.input_tensor[index], self.target_tensor[index]
+        
+    
+>>>>>>> Mincheol:input/code/datasets.py

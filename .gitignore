@@ -38,6 +38,7 @@ __MACOSX/
 __pycache__
 .netrc
 .screenrc
+<<<<<<< HEAD
 *test.ipynb
 
 ## shell script
@@ -45,3 +46,6 @@ __pycache__
 my_work_*.yaml
 run_hyper*.sh
 hyper-*.test
+=======
+*.sh
+>>>>>>> Mincheol

@@ -19,6 +19,7 @@ def main():
         # rating df
         train_rating = os.path.join(data_dir, 'train_ratings.csv')
         rating_df = pd.read_csv(train_rating)
+        
         rating_df['rating'] = 1.0 # implicit feedback
         users = set(rating_df.loc[:, 'user'])
         items = set(rating_df.loc[:, 'item'])
@@ -78,34 +79,25 @@ def main():
         if len(users)-1 != max(users):
             users_dict = {users[i]: i for i in range(len(users))}
             rating_df['user']  = rating_df['user'].map(lambda x : users_dict[x])
-            users = list(set(rating_df.loc[:,'user']))
             
         if len(items)-1 != max(items):
             items_dict = {items[i]: i for i in range(len(items))}
             rating_df['item']  = rating_df['item'].map(lambda x : items_dict[x])
-            items =  list(set((rating_df.loc[:, 'item'])))
 
         rating_df = rating_df.sort_values(by=['user'])
         rating_df.reset_index(drop=True, inplace=True)
         print("6. zero-based index done")
 
         # to_data 
-        output_path = os.path.join(data_dir,'deepfm_train_sample.json')
-        
+        output_path = os.path.join(data_dir,'deepfm_train.json')
         rating_df.drop(columns='time',inplace=True)
-        rating_df.iloc[:1000].to_json(output_path)
-        #rating_df.to_json(output_path)
+        rating_df.to_json(output_path)
         
         print(f'{args.model} Preprocessing done!!!')
         print(f'the file located in {output_path}')
 
     else:
-        genres_df = pd.read_csv("../data/train/genres.tsv", sep="\t")
-        array, index = pd.factorize(genres_df["genre"])
-        genres_df["genre"] = array
-        genres_df.groupby("item")["genre"].apply(list).to_json(
-            "data/Ml_item2attributes.json"
-        )
+        pass
 
 if __name__ == "__main__":
     main()
