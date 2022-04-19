@@ -28,6 +28,7 @@ def main():
     # argparser
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default='42', help=' ')
+    parser.add_argument('--use_all', type=str2bool, default=True, help='num of epochs')
     
     parser.add_argument('--v', type=str, default='1')
     parser.add_argument('--data_dir', type=str, default='../data/train')
@@ -127,14 +128,18 @@ def main():
         #####################################
         valid_size = args.valid_size
         tarin_all = args.train_all
-        if args.mode == 'static':
-            train_dataset = DeepFMDataset_renew(rating, year, genres,director,  valid_size, mode = 'static', train_all = tarin_all)
-            test_dataset = DeepFMDataset_renew(rating, year, genres,director, valid_size, mode = 'seq', train_all = tarin_all)
+        if args.use_all:
+            if args.mode == 'static':
+                train_dataset = DeepFMDataset_renew(rating, year, genres,director,  valid_size, mode = 'static', train_all = tarin_all)
+                test_dataset = DeepFMDataset_renew(rating, year, genres,director, valid_size, mode = 'seq', train_all = tarin_all)
+            else:
+                train_dataset = DeepFMDataset_renew(rating, year, genres,director,  valid_size, mode = 'seq', train_all = tarin_all)
+                test_dataset = DeepFMDataset_renew(rating, year, genres,director, valid_size, mode = 'static', train_all = tarin_all)  
+        
+            n_user,n_item,n_year,n_genre,n_director = train_dataset.get_num_context()
         else:
-            train_dataset = DeepFMDataset_renew(rating, year, genres,director,  valid_size, mode = 'seq', train_all = tarin_all)
-            test_dataset = DeepFMDataset_renew(rating, year, genres,director, valid_size, mode = 'static', train_all = tarin_all)  
-
-        n_user,n_item,n_year,n_genre,n_director = train_dataset.get_num_context()
+            train_dataset = DeepFMDataset(rating, year, genres,director,  valid_size, mode = 'static')
+            test_dataset = DeepFMDataset(rating, year, genres,director, valid_size, mode = 'seq')
 
         train_loader = DataLoader(train_dataset, batch_size=3920, shuffle=True, num_workers=3)
         test_loader = DataLoader(test_dataset, batch_size=3920, shuffle=True, num_workers=3)
@@ -142,15 +147,21 @@ def main():
 
         #####################################
         # config setting
-        if args.train_all:
-            input_dims = [n_user,n_item,n_year,n_genre,n_director]
-        else: 
-            input_dims = [n_user,n_year,n_genre,n_director]
-            print('Train_all : False')
-        print(input_dims)
+        if args.use_all:
+            if args.train_all:
+                input_dims = [n_user,n_item,n_year,n_genre,n_director]
+            else: 
+                input_dims = [n_user,n_year,n_genre,n_director]
+        else:
+            input_dims = [n_user,n_item, n_year]
+    
         embedding_dim = args.embedding_dim
         mlp_dims = args.mlp_dims
-        model = DeepFM_renew(input_dims, embedding_dim, mlp_dims=mlp_dims, drop_rate=args.drop_rate).to(device)
+        if args.use_all:
+            model = DeepFM_renew(input_dims, embedding_dim, mlp_dims=mlp_dims, drop_rate=args.drop_rate).to(device)
+        else:
+            model = DeepFM(input_dims, embedding_dim, mlp_dims=mlp_dims, drop_rate=args.drop_rate).to(device)
+        
         bce_loss = nn.BCELoss() # Binary Cross Entropy loss
 
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
