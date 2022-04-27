@@ -1,31 +1,54 @@
-# Movie Recommendation Baseline Code
+# Transformer
 
-영화 추천 대회를 위한 베이스라인 코드입니다. 다음 코드를 대회에 맞게 재구성 했습니다.
+Movie Recommendation with Transformer Base Model
 
-- 코드 출처: https://github.com/aHuiWang/CIKM2020-S3Rec
+## Model
+> ### S3Rec (Pretrain Model)
+- [paper](https://arxiv.org/abs/2008.07873v1)
+- [model reference code](https://github.com/aHuiWang/CIKM2020-S3Rec)
 
-## Installation
+> ### SASRec
+- [paper](https://arxiv.org/abs/1808.09781v1)
+- [model reference code](https://github.com/aHuiWang/CIKM2020-S3Rec)
 
-```
-pip install -r requirements.txt
-```
+    BoostCamp AI Tech RecSys Level 2 P-stage Special Mission 4 참고
+
+> ### BERT4Rec
+- [paper](https://arxiv.org/abs/1904.06690v2)
+- [model reference code](https://github.com/jaywonchung/BERT4Rec-VAE-Pytorch)
+
+    BoostCamp AI Tech RecSys Level 2 P-stage Special Mission 5 참고
 
 ## How to run
 
-1. Pretraining
+> ### SASRec
+1. Pretraining with S3Rec
    ```
    python run_pretrain.py
    ```
 2. Fine Tuning (Main Training)
    1. with pretrained weight
       ```
-      python run_train.py --using_pretrain
+      python run_train.py --model_name SASRec --using_pretrain
       ```
    2. without pretrained weight
       ```
-      python run_train.py
+      python run_train.py --model_name SASRec 
       ```
+
 3. Inference
    ```
-   python inference.py
+   python inference.py --model_name SASRec 
+   ```
+
+> ### Bert4Rec
+
+1. Main Training
+   ```
+   python run_train.py --model_name BERT4Rec 
+   ```
+
+2. Inference
+   ```
+   python inference.py --model_name BERT4Rec 
    ```

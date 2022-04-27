@@ -1,31 +1,42 @@
-# Movie Recommendation Baseline Code
+# NCF
 
-영화 추천 대회를 위한 베이스라인 코드입니다. 다음 코드를 대회에 맞게 재구성 했습니다.
+Movie Recommendation NCF(Neural Collaborative Filtering) Code
 
-- 코드 출처: https://github.com/aHuiWang/CIKM2020-S3Rec
+- [paper](https://arxiv.org/abs/1708.05031)
+- [model reference code](https://github.com/yst3147/Recsys_Implement/blob/main/NCF/NCF.ipynb)
 
-## Installation
+   BoostCamp AI Tech RecSys Level 2 U-stage 기본과제 2 참고
 
-```
-pip install -r requirements.txt
-```
 
 ## How to run
 
-1. Pretraining
+> ### NCF Multi-Layer Perceptron
+  
    ```
-   python run_pretrain.py
+   # without wandb
+   python ncf.py --model_name NCF
+
+   # with wandb
+   python ncf.py --model_name NCF --wandb
    ```
-2. Fine Tuning (Main Training)
-   1. with pretrained weight
-      ```
-      python run_train.py --using_pretrain
-      ```
-   2. without pretrained weight
-      ```
-      python run_train.py
-      ```
-3. Inference
+
+> ### NCF Generalized Matrix Factorization (GMF)
+
    ```
-   python inference.py
+   # without wandb
+   python ncf.py --model_name GMF
+
+   # with wandb
+   python ncf.py --model_name GMF --wandb
    ```
+
+> ### NCF Fusion of GMF and MLP (NeuMF)
+
+   ```
+   # without wandb
+   python ncf.py --model_name NeuMF
+
+   # with wandb
+   python ncf.py --model_name NeuMF --wandb
+   ```
+

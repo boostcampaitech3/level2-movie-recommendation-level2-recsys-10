@@ -1,31 +1,21 @@
-# Movie Recommendation Baseline Code
+# MF
 
-영화 추천 대회를 위한 베이스라인 코드입니다. 다음 코드를 대회에 맞게 재구성 했습니다.
+Movie Recommendation MF(Matrix Factorization) Code
 
-- 코드 출처: https://github.com/aHuiWang/CIKM2020-S3Rec
+- [paper](https://datajobs.com/data-science-repo/Recommender-Systems-%5BNetflix%5D.pdf)
 
-## Installation
+   BoostCamp AI Tech RecSys Level 2 U-stage 기본과제 1 참고
 
-```
-pip install -r requirements.txt
-```
 
 ## How to run
 
-1. Pretraining
+> ### Matrix Factorization
    ```
-   python run_pretrain.py
+   python mf.py --model_name MF
    ```
-2. Fine Tuning (Main Training)
-   1. with pretrained weight
-      ```
-      python run_train.py --using_pretrain
-      ```
-   2. without pretrained weight
-      ```
-      python run_train.py
-      ```
-3. Inference
+
+> ### Alternating Least Squares(Not Used)
    ```
-   python inference.py
+   python mf.py --model_name ALS
    ```
+

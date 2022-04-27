@@ -1,31 +1,17 @@
-# Movie Recommendation Baseline Code
+# AutoRec
 
-영화 추천 대회를 위한 베이스라인 코드입니다. 다음 코드를 대회에 맞게 재구성 했습니다.
+Movie Recommendation AutoRec Code
 
-- 코드 출처: https://github.com/aHuiWang/CIKM2020-S3Rec
+- [paper](https://users.cecs.anu.edu.au/~akmenon/papers/autorec/autorec-paper.pdf)
+- [model reference code](https://github.com/yst3147/Recsys_Implement/blob/main/AutoRec/AutoRec.ipynb)
 
-## Installation
+   BoostCamp AI Tech RecSys Level 2 U-stage 기본과제 2 참고
 
+### How to Run
 ```
-pip install -r requirements.txt
+# without wandb
+python autorec.py
+
+# with wandb
+python autorec.py --wandb
 ```
-
-## How to run
-
-1. Pretraining
-   ```
-   python run_pretrain.py
-   ```
-2. Fine Tuning (Main Training)
-   1. with pretrained weight
-      ```
-      python run_train.py --using_pretrain
-      ```
-   2. without pretrained weight
-      ```
-      python run_train.py
-      ```
-3. Inference
-   ```
-   python inference.py
-   ```

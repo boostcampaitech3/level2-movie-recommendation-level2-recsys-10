@@ -38,6 +38,7 @@ __MACOSX/
 __pycache__
 .netrc
 .screenrc
+*sample_submission.ipynb
 
 ## shell script
 *run.sh 
