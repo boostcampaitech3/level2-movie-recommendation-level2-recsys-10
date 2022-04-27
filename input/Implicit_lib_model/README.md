@@ -2,7 +2,7 @@
 
 Movie Recommendation with Implicit Library
 
-- [reference code](https://github.com/benfred/implicithttps://github.com/benfred/implicit)
+- [reference code](https://github.com/benfred/implicit)
 
 ## Installation
 
