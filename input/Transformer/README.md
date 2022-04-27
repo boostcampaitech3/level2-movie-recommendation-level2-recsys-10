@@ -11,13 +11,13 @@ Movie Recommendation with Transformer Base Model
 - [paper](https://arxiv.org/abs/1808.09781v1)
 - [model reference code](https://github.com/aHuiWang/CIKM2020-S3Rec)
 
-    BoostCamp AI Tech RecSys Level 2 P-stage Special Mission 4 참고
+    BoostCamp AI Tech RecSys Level 2 MovieRec P-stage Special Mission 4 참고
 
 > ### BERT4Rec
 - [paper](https://arxiv.org/abs/1904.06690v2)
 - [model reference code](https://github.com/jaywonchung/BERT4Rec-VAE-Pytorch)
 
-    BoostCamp AI Tech RecSys Level 2 P-stage Special Mission 5 참고
+    BoostCamp AI Tech RecSys Level 2 MovieRec P-stage Special Mission 5 참고
 
 ## How to run
 
