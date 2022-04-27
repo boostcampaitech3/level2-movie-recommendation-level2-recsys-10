@@ -41,7 +41,7 @@ Movie Recommendation with Transformer Base Model
    python inference.py --model_name SASRec 
    ```
 
-> ### Bert4Rec
+> ### BERT4Rec
 
 1. Main Training
    ```
