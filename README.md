@@ -170,6 +170,8 @@ level2-movie-recommendation-recsys-10
 ## ⚙️ Training 명령어
 각 모델의 README를 참고하시면 됩니다 :)
 
+## ✨ WRAP-UP REPORT
+[WRAP-UP REPORT](https://poised-speedwell-186.notion.site/P-Stage-2-WRAP-UP-REPORT-d6868db5c62f42cc9127b717b23e271f)
 
 ## 📜 참고자료
 
